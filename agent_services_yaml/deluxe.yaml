@@ -1,0 +1,901 @@
+subtype: multi_agent
+account_id: 68b9ac15fea04e89975257dd
+customer: horseshoe-bend
+starting_node: start
+use_case: document_generation
+chat_app_name: Report Generation Chat
+initial_state:
+  max_loops: 30
+  messages:
+    - role: system
+      content: >-
+        You are an expert maritime database analyst specializing in vessel
+        tracking and alert systems. Your mission is to provide accurate answers
+        by efficiently querying the database with correct field names and
+        comprehensive filters.
+
+
+        ## Database Structure
+
+
+        **Primary database:** `lux`
+
+
+        **Key collections:**
+
+
+        1. **alerts collection:**
+           - Alert records with classification and temporal data
+           - Common fields: `rule`, `ruleName`, `ruleType`, `type`, `category`, `severity`, `title`, `description`
+           - Temporal fields: `date`, `timestamp`, `publishedDate`
+           - Geographic fields: `location`, `area`, `region`, `coordinates`
+
+        2. **entity collection:**
+           - Vessel/entity tracking and identification data
+           - Identity: `name`, `imo`, `mmsi`, `callSign`
+           - Location: `latitude`, `longitude`, `position`, `coordinates`
+           - Movement: `speed`, `course`, `heading`, `status`, `navigationStatus`
+           - Classification: `type`, `vesselType`, `flag`, `flagCode`, `countryCode`, `nationality`
+           - Temporal: `timestamp`, `lastUpdate`, `eta`
+           - **Note:** Fields may be nested under `attributes` object (e.g., `attributes.Flag`, `attributes.Type`)
+
+        3. **streams collection:**
+           - Data stream metadata and statistics
+           - Fields: stream names, `eventsPerDay`, `dailyEventRate`, `eventRate`, volume metrics
+
+        ## Critical Query Strategy
+
+
+        ### Phase 1: Schema Discovery (ALWAYS START HERE)
+
+        1. **Use `collection-schema(db:lux, coll:<collection>,
+        sampleSize:100)`** to identify exact field names
+           - Pay special attention to nested structures (check for `attributes.*` patterns)
+           - Note field data types (string vs number affects query syntax)
+           - Identify if values are arrays, objects, or primitives
+
+        2. **Use `find(db:lux, coll:<collection>, limit:5-10)`** to see real
+        data
+           - Verify actual field names (case-sensitive!)
+           - Check value formats and variations
+           - Identify nested field paths using dot notation
+           - Look for multiple naming conventions (e.g., "Netherlands" vs "NLD" vs "NL")
+
+        ### Phase 2: Query Construction
+
+
+        **For text matching (countries, vessel names, alert types):**
+
+        - **Flexible matching:** `{fieldName: {$regex: "pattern", $options:
+        "i"}}` for partial, case-insensitive matches
+
+        - **Multiple variations:** `{fieldName: {$in: ["value1", "value2",
+        "value3"]}}` to capture all formats
+
+        - **Example:** For Netherlands, try `{$in: ["Netherlands", "NLD",
+        "NL"]}` or `{$regex: "netherlands", $options: "i"}`
+
+
+        **For nested fields:**
+
+        - Use dot notation: `{"attributes.Flag": value}` or `{"attributes.Type":
+        value}`
+
+        - Always verify nesting structure in schema before querying
+
+
+        **For numeric filters:**
+
+        - Exclude invalid data: `{speed: {$gt: 0}}` to exclude stationary/null
+        values
+
+        - Range queries: `{fieldName: {$gte: min, $lte: max}}`
+
+
+        **For counting by category:**
+
+        - Use `count()` with specific filters for simple counts
+
+        - Use `aggregate()` with `$group` for grouping/counting multiple
+        categories
+
+
+        ### Phase 3: Query Execution
+
+
+        **Use the right tool:**
+
+        - **`count(db:lux, coll:<collection>, query:{filter})`** - For simple
+        counting with filters
+
+        - **`aggregate(db:lux, coll:<collection>, pipeline:[...])`** - For:
+          - Grouping and counting: `[{$group: {_id: "$field", count: {$sum: 1}}}, {$sort: {count: -1}}]`
+          - Finding min/max: `[{$match: {field: {$gt: 0}}}, {$group: {_id: null, min: {$min: "$field"}, max: {$max: "$field"}}}]`
+          - Top N items: Add `{$limit: N}` after sorting
+        - **`find(db:lux, coll:<collection>, filter:{...})`** - For retrieving
+        specific documents (stream metadata, verification)
+
+
+        **Critical patterns:**
+
+        - **Always filter first:** Use `$match` as first stage in aggregations
+        to exclude nulls/zeros/irrelevant data
+
+        - **Always sort descending for "most frequent":** `{$sort: {count: -1}}`
+
+        - **Test queries before final count:** Use `find()` with your filter to
+        verify it captures correct data
+
+
+        ### Phase 4: Verification & Answer
+
+
+        **Before terminating:**
+
+        1. Verify your query used correct field names from schema (including
+        nested paths)
+
+        2. Confirm filters capture all variations of target values
+
+        3. Ensure results are complete and meaningful
+
+        4. Extract exact numeric values - never approximate
+
+
+        **Answer format:**
+
+        - Provide specific numbers, not ranges
+
+        - Break down by category if question asks for details
+
+        - State totals clearly
+
+
+        ## Optimal Workflow (Target: 3-4 steps)
+
+
+        1. **Schema inspection:** `collection-schema()` to identify exact fields
+        and structure
+
+        2. **Data sampling:** `find()` with limit to verify field paths and
+        value formats
+
+        3. **Execute query:** `count()` or `aggregate()` with correct filters
+
+        4. **Terminate:** `terminate_conversation()` with precise answer
+
+
+        ## Common Pitfalls to Avoid
+
+
+        1. **Field name assumptions:** NEVER guess field names - always check
+        schema first
+
+        2. **Missing nested paths:** If schema shows `attributes` object, use
+        `attributes.FieldName` in queries
+
+        3. **Single value format:** Don't assume one format - check for
+        variations (country codes, full names, abbreviations)
+
+        4. **Case sensitivity:** Use `$regex` with `$options: "i"` for text
+        matching unless exact case is confirmed
+
+        5. **Premature counting:** Always sample with `find()` first to verify
+        your filter works
+
+        6. **Wrong tool selection:** Use `aggregate()` for min/max/grouping, not
+        `count()`
+
+        7. **Incomplete filters:** For countries, include all possible formats;
+        for alerts, check all relevant field names
+
+
+        ## Priority Hierarchy
+
+
+        1. **CORRECTNESS FIRST:** Get the right answer using correct field names
+        and comprehensive filters
+
+        2. **Tool appropriateness:** Use the right tool for the task
+
+        3. **Verification:** Sample data before final queries
+
+        4. **Efficiency:** Minimize steps without sacrificing accuracy
+machine:
+  start:
+    workflow_config:
+      final_output_nodes: []
+      user_input:
+        message:
+          type: ParagraphText
+      workflow:
+        - name: add_user_message
+          type: insert_messages
+          config:
+            index: -1
+          inputs:
+            messages: messages
+            new_messages:
+              - role: '!user'
+                content: message
+    write_to_state:
+      messages: add_user_message
+    next_node:
+      default: ChatAgent
+  ChatAgent:
+    workflow_config:
+      final_output_nodes:
+        - node: Agent
+          channel_name: Agent
+          channel_type: messages
+          cast_mode:
+            mode: auto
+      workflow:
+        - name: Agent
+          type: chat_generation_with_tools
+          config:
+            max_tokens: 25000
+            temperature: 0
+          inputs:
+            model: '!anthropic/claude-3-7-sonnet-latest'
+            messages: messages
+            tools:
+              - type: '!function'
+                function:
+                  name: '!list-collections'
+                  description: '!List all collections for a given database'
+                  parameters:
+                    type: '!object'
+                    properties:
+                      database:
+                        type: '!string'
+                        description: '!Database name'
+              - type: '!function'
+                function:
+                  name: '!list-databases'
+                  description: '!List all databases for a MongoDB connection'
+                  parameters:
+                    type: '!object'
+                    properties: {}
+                    additionalProperties: false
+                  strict: true
+              - type: '!function'
+                function:
+                  name: '!find'
+                  description: '!Run a find query against a MongoDB collection'
+                  parameters:
+                    type: '!object'
+                    properties:
+                      database:
+                        type: '!string'
+                        description: '!Database name'
+                      collection:
+                        type: '!string'
+                        description: '!Collection name'
+                      filter:
+                        type: '!object'
+                        additionalProperties: true
+                        description: >-
+                          !The query filter, matching the syntax of the query
+                          argument of db.collection.find()
+                      projection:
+                        type: '!object'
+                        additionalProperties: true
+                        description: >-
+                          !The projection, matching the syntax of the projection
+                          argument of db.collection.find()
+                      limit:
+                        type: '!number'
+                        description: '!The maximum number of documents to return'
+                      sort:
+                        type: '!object'
+                        additionalProperties: true
+                        description: >-
+                          !A document, describing the sort order, matching the
+                          syntax of the sort argument of cursor.sort(). The keys
+                          of the object are the fields to sort on, while the
+                          values are the sort directions (1 for ascending, -1
+                          for descending).
+                      responseBytesLimit:
+                        type: '!number'
+                        description: >-
+                          !The maximum number of bytes to return in the
+                          response. This value is capped by the server's
+                          configured maxBytesPerQuery and cannot be exceeded.
+                          Note to LLM: If the entire query result is required,
+                          use the "export" tool instead of increasing this
+                          limit.
+                    required:
+                      - '!database'
+                      - '!collection'
+              - type: '!function'
+                function:
+                  name: '!collection-indexes'
+                  description: '!Describe the indexes for a collection'
+                  input_schema:
+                    type: '!object'
+                    properties:
+                      database:
+                        type: '!string'
+                        description: '!Database name'
+                      collection:
+                        type: '!string'
+                        description: '!Collection name'
+                    required:
+                      - '!database'
+                      - '!collection'
+                    additionalProperties: false
+              - type: '!function'
+                function:
+                  name: '!collection-schema'
+                  description: '!Describe the schema for a collection'
+                  input_schema:
+                    type: '!object'
+                    properties:
+                      database:
+                        type: '!string'
+                        description: '!Database name'
+                      collection:
+                        type: '!string'
+                        description: '!Collection name'
+                      sampleSize:
+                        type: '!number'
+                        description: '!Number of documents to sample for schema inference'
+                      responseBytesLimit:
+                        type: '!number'
+                        description: >-
+                          !The maximum number of bytes to return in the
+                          response. This value is capped by the server's
+                          configured maxBytesPerQuery and cannot be exceeded.
+                    required:
+                      - '!database'
+                      - '!collection'
+                    additionalProperties: false
+              - type: '!function'
+                function:
+                  name: '!collection-storage-size'
+                  description: '!Gets the size of the collection'
+                  input_schema:
+                    type: '!object'
+                    properties:
+                      database:
+                        type: '!string'
+                        description: '!Database name'
+                      collection:
+                        type: '!string'
+                        description: '!Collection name'
+                    required:
+                      - '!database'
+                      - '!collection'
+                    additionalProperties: false
+              - type: '!function'
+                function:
+                  name: '!count'
+                  description: >-
+                    !Gets the number of documents in a MongoDB collection using
+                    db.collection.count() and query as an optional filter
+                    parameter
+                  input_schema:
+                    type: '!object'
+                    properties:
+                      database:
+                        type: '!string'
+                        description: '!Database name'
+                      collection:
+                        type: '!string'
+                        description: '!Collection name'
+                      query:
+                        type: '!object'
+                        additionalProperties: true
+                        description: >-
+                          !A filter/query parameter. Allows users to filter the
+                          documents to count. Matches the syntax of the filter
+                          argument of db.collection.count().
+                    required:
+                      - '!database'
+                      - '!collection'
+                    additionalProperties: false
+              - type: '!function'
+                function:
+                  name: '!db-stats'
+                  description: >-
+                    !Returns statistics that reflect the use state of a single
+                    database
+                  input_schema:
+                    type: '!object'
+                    properties:
+                      database:
+                        type: '!string'
+                        description: '!Database name'
+                    required:
+                      - '!database'
+                    additionalProperties: false
+              - type: '!function'
+                function:
+                  name: '!aggregate'
+                  description: >-
+                    !Run an aggregation against a MongoDB collection.
+                    $vectorSearch **MUST** be the first stage of the pipeline,
+                    or the first stage of a $unionWith subpipeline.
+
+                    ### Usage Rules for `$vectorSearch`
+
+                    - **Unset embeddings:**
+                      Unless the user explicitly requests the embeddings, add an `$unset` stage **at the end of the pipeline** to remove the embedding field and avoid context limits. **The $unset stage in this situation is mandatory**.
+                    - **Pre-filtering:**
+
+                    If the user requests additional filtering, include filters
+                    in `$vectorSearch.filter` only for pre-filter fields in the
+                    vector index.
+                        NEVER include fields in $vectorSearch.filter that are not part of the vector index.
+                    - **Post-filtering:**
+                        For all remaining filters, add a $match stage after $vectorSearch.
+                    ### Note to LLM
+
+                    - If unsure which fields are filterable, use the
+                    collection-indexes tool to determine valid prefilter fields.
+
+                    - If no requested filters are valid prefilters, omit the
+                    filter key from $vectorSearch.
+                  input_schema:
+                    type: '!object'
+                    properties:
+                      database:
+                        type: '!string'
+                        description: '!Database name'
+                      collection:
+                        type: '!string'
+                        description: '!Collection name'
+                      pipeline:
+                        type: '!array'
+                        items:
+                          anyOf:
+                            - type: '!object'
+                              additionalProperties: true
+                            - type: '!object'
+                              properties:
+                                $vectorSearch:
+                                  type: '!object'
+                                  properties:
+                                    exact:
+                                      type: '!boolean'
+                                      description: >-
+                                        !When true, uses an ENN algorithm,
+                                        otherwise uses ANN. Using ENN is not
+                                        compatible with numCandidates, in that
+                                        case, numCandidates must be left empty.
+                                    index:
+                                      type: '!string'
+                                      description: >-
+                                        !Name of the index, as retrieved from
+                                        the 'collection-indexes' tool.
+                                    path:
+                                      type: '!string'
+                                      description: >-
+                                        !Field, in dot notation, where to
+                                        search. There must be a vector search
+                                        index for that field. Note to LLM: When
+                                        unsure, use the 'collection-indexes'
+                                        tool to validate that the field is
+                                        indexed with a vector search index.
+                                    queryVector:
+                                      anyOf:
+                                        - type: '!string'
+                                        - type: '!array'
+                                          items:
+                                            type: '!number'
+                                      description: >-
+                                        !The content to search for. The
+                                        embeddingParameters field is mandatory
+                                        if the queryVector is a string, in that
+                                        case, the tool generates the embedding
+                                        automatically using the provided
+                                        configuration.
+                                    numCandidates:
+                                      type: '!integer'
+                                      exclusiveMinimum: 0
+                                      description: >-
+                                        !Number of candidates for the ANN
+                                        algorithm. Mandatory when exact is
+                                        false.
+                                    limit:
+                                      type: '!integer'
+                                      exclusiveMinimum: 0
+                                    filter:
+                                      type: '!object'
+                                      additionalProperties: true
+                                      description: >-
+                                        !MQL filter that can only use filter
+                                        fields from the index definition. Note
+                                        to LLM: If unsure, use the
+                                        'collection-indexes' tool to learn which
+                                        fields can be used for filtering.
+                                    embeddingParameters:
+                                      type: '!object'
+                                      properties:
+                                        outputDimension:
+                                          type: '!number'
+                                          enum:
+                                            - '!256'
+                                            - '!512'
+                                            - '!1024'
+                                            - '!2048'
+                                            - '!4096'
+                                        outputDtype:
+                                          type: '!string'
+                                          enum:
+                                            - '!float'
+                                            - '!int8'
+                                            - '!uint8'
+                                            - '!binary'
+                                            - '!ubinary'
+                                        model:
+                                          type: '!string'
+                                          enum:
+                                            - '!voyage-3-large'
+                                            - '!voyage-3.5'
+                                            - '!voyage-3.5-lite'
+                                            - '!voyage-code-3'
+                                      additionalProperties: false
+                                      description: >-
+                                        !The embedding model and its parameters
+                                        to use to generate embeddings before
+                                        searching. It is mandatory if
+                                        queryVector is a string value. Note to
+                                        LLM: If unsure, ask the user before
+                                        providing one.
+                                  required:
+                                    - '!index'
+                                    - '!path'
+                                    - '!queryVector'
+                                  additionalProperties: true
+                              required:
+                                - '!$vectorSearch'
+                              additionalProperties: false
+                        description: '!An array of aggregation stages to execute.'
+                      responseBytesLimit:
+                        type: '!number'
+                        description: >-
+                          !The maximum number of bytes to return in the
+                          response. This value is capped by the server's
+                          configured maxBytesPerQuery and cannot be exceeded.
+                          Note to LLM: If the entire aggregation result is
+                          required, use the 'export' tool instead of increasing
+                          this limit.
+                    required:
+                      - '!database'
+                      - '!collection'
+                      - '!pipeline'
+                    additionalProperties: false
+              - type: '!function'
+                function:
+                  name: '!explain'
+                  description: >-
+                    !Returns statistics describing the execution of the winning
+                    plan chosen by the query optimizer for the evaluated method
+                  input_schema:
+                    type: '!object'
+                    properties:
+                      database:
+                        type: '!string'
+                        description: '!Database name'
+                      collection:
+                        type: '!string'
+                        description: '!Collection name'
+                      method:
+                        type: '!array'
+                        items:
+                          anyOf:
+                            - type: '!object'
+                              properties:
+                                name:
+                                  type: '!string'
+                                  const: '!aggregate'
+                                arguments:
+                                  type: '!object'
+                                  properties:
+                                    pipeline:
+                                      type: '!array'
+                                      items:
+                                        anyOf:
+                                          - type: '!object'
+                                            additionalProperties: true
+                                          - type: '!object'
+                                            properties:
+                                              $vectorSearch:
+                                                type: '!object'
+                                                properties:
+                                                  exact:
+                                                    type: '!boolean'
+                                                    description: >-
+                                                      !When true, uses an ENN algorithm,
+                                                      otherwise uses ANN. Using ENN is not
+                                                      compatible with numCandidates, in that
+                                                      case, numCandidates must be left empty.
+                                                  index:
+                                                    type: '!string'
+                                                    description: >-
+                                                      !Name of the index, as retrieved from
+                                                      the 'collection-indexes' tool.
+                                                  path:
+                                                    type: '!string'
+                                                    description: >-
+                                                      !Field, in dot notation, where to
+                                                      search. There must be a vector search
+                                                      index for that field. Note to LLM: When
+                                                      unsure, use the 'collection-indexes'
+                                                      tool to validate that the field is
+                                                      indexed with a vector search index.
+                                                  queryVector:
+                                                    anyOf:
+                                                      - type: '!string'
+                                                      - type: '!array'
+                                                        items:
+                                                          type: '!number'
+                                                    description: >-
+                                                      !The content to search for. The
+                                                      embeddingParameters field is mandatory
+                                                      if the queryVector is a string, in that
+                                                      case, the tool generates the embedding
+                                                      automatically using the provided
+                                                      configuration.
+                                                  numCandidates:
+                                                    type: '!integer'
+                                                    exclusiveMinimum: 0
+                                                    description: >-
+                                                      !Number of candidates for the ANN
+                                                      algorithm. Mandatory when exact is
+                                                      false.
+                                                  limit:
+                                                    type: '!integer'
+                                                    exclusiveMinimum: 0
+                                                  filter:
+                                                    type: '!object'
+                                                    additionalProperties: true
+                                                    description: >-
+                                                      !MQL filter that can only use filter
+                                                      fields from the index definition. Note
+                                                      to LLM: If unsure, use the
+                                                      'collection-indexes' tool to learn which
+                                                      fields can be used for filtering.
+                                                  embeddingParameters:
+                                                    type: '!object'
+                                                    properties:
+                                                      outputDimension:
+                                                        type: '!number'
+                                                        enum:
+                                                          - '!256'
+                                                          - '!512'
+                                                          - '!1024'
+                                                          - '!2048'
+                                                          - '!4096'
+                                                      outputDtype:
+                                                        type: '!string'
+                                                        enum:
+                                                          - '!float'
+                                                          - '!int8'
+                                                          - '!uint8'
+                                                          - '!binary'
+                                                          - '!ubinary'
+                                                      model:
+                                                        type: '!string'
+                                                        enum:
+                                                          - '!voyage-3-large'
+                                                          - '!voyage-3.5'
+                                                          - '!voyage-3.5-lite'
+                                                          - '!voyage-code-3'
+                                                    additionalProperties: false
+                                                    description: >-
+                                                      !The embedding model and its parameters
+                                                      to use to generate embeddings before
+                                                      searching. It is mandatory if
+                                                      queryVector is a string value. Note to
+                                                      LLM: If unsure, ask the user before
+                                                      providing one.
+                                                required:
+                                                  - '!index'
+                                                  - '!path'
+                                                  - '!queryVector'
+                                                additionalProperties: true
+                                            required:
+                                              - '!$vectorSearch'
+                                            additionalProperties: false
+                                      description: >-
+                                        !An array of aggregation stages to
+                                        execute.
+                                  required:
+                                    - '!pipeline'
+                                  additionalProperties: false
+                              required:
+                                - '!name'
+                                - '!arguments'
+                              additionalProperties: false
+                            - type: '!object'
+                              properties:
+                                name:
+                                  type: '!string'
+                                  const: '!find'
+                                arguments:
+                                  type: '!object'
+                                  properties:
+                                    filter:
+                                      type: '!object'
+                                      additionalProperties: true
+                                      description: >-
+                                        !The query filter, matching the syntax
+                                        of the query argument of
+                                        db.collection.find()
+                                    projection:
+                                      type: '!object'
+                                      additionalProperties: true
+                                      description: >-
+                                        !The projection, matching the syntax of
+                                        the projection argument of
+                                        db.collection.find()
+                                    limit:
+                                      type: '!number'
+                                      description: >-
+                                        !The maximum number of documents to
+                                        return
+                                    sort:
+                                      type: '!object'
+                                      additionalProperties: {}
+                                      description: >-
+                                        !A document, describing the sort order,
+                                        matching the syntax of the sort argument
+                                        of cursor.sort(). The keys of the object
+                                        are the fields to sort on, while the
+                                        values are the sort directions (1 for
+                                        ascending, -1 for descending).
+                                    responseBytesLimit:
+                                      type: '!number'
+                                      description: >-
+                                        !The maximum number of bytes to return
+                                        in the response. This value is capped by
+                                        the server's configured maxBytesPerQuery
+                                        and cannot be exceeded. Note to LLM: If
+                                        the entire query result is required, use
+                                        the 'export' tool instead of increasing
+                                        this limit.
+                                  additionalProperties: false
+                              required:
+                                - '!name'
+                                - '!arguments'
+                              additionalProperties: false
+                            - type: '!object'
+                              properties:
+                                name:
+                                  type: '!string'
+                                  const: '!count'
+                                arguments:
+                                  type: '!object'
+                                  properties:
+                                    query:
+                                      type: '!object'
+                                      additionalProperties: true
+                                      description: >-
+                                        !A filter/query parameter. Allows users
+                                        to filter the documents to count.
+                                        Matches the syntax of the filter
+                                        argument of db.collection.count().
+                                  additionalProperties: false
+                              required:
+                                - '!name'
+                                - '!arguments'
+                              additionalProperties: false
+                        description: '!The method and its arguments to run'
+                      verbosity:
+                        type: '!string'
+                        enum:
+                          - '!queryPlanner'
+                          - '!queryPlannerExtended'
+                          - '!executionStats'
+                          - '!allPlansExecution'
+                        description: >-
+                          !The verbosity of the explain plan, defaults to
+                          queryPlanner. If the user wants to know how fast is a
+                          query in execution time, use executionStats. It
+                          supports all verbosities as defined in the MongoDB
+                          Driver.
+                    required:
+                      - '!database'
+                      - '!collection'
+                      - '!method'
+                    additionalProperties: false
+              - type: '!function'
+                function:
+                  name: '!mongodb-logs'
+                  description: '!Returns the most recent logged mongod events'
+                  input_schema:
+                    type: '!object'
+                    properties:
+                      type:
+                        type: '!string'
+                        enum:
+                          - '!global'
+                          - '!startupWarnings'
+                        description: >-
+                          !The type of logs to return. Global returns all recent
+                          log entries, while startupWarnings returns only
+                          warnings and errors from when the process started.
+                      limit:
+                        type: '!integer'
+                        maximum: 1024
+                        minimum: 1
+                        description: '!The maximum number of log entries to return.'
+                    additionalProperties: false
+        - name: extend_chat_history_with_tool_use
+          type: extend_chat_history_with_tool_use
+          inputs:
+            chat_history: messages
+            llm_response: Agent
+            tool_responses: []
+        - name: extract_tool_calls
+          type: data_transform
+          config:
+            action: get_pydantic_attribute
+            additional_inputs:
+              attribute: tool_calls
+          inputs:
+            response: Agent
+    write_to_state:
+      messages: extend_chat_history_with_tool_use
+    next_node:
+      cases:
+        - value: PlanningAgent
+          condition:
+            condition_input_var: extract_tool_calls
+            operator: bool
+      default: start
+  PlanningAgent:
+    workflow_config:
+      final_output_nodes:
+        - node: Agent
+          channel_name: Agent
+          channel_type: messages
+          cast_mode:
+            mode: auto
+      workflow:
+        - name: Agent
+          type: tool_generation
+          config:
+            max_turns: 1
+            model: '!anthropic/claude-3-7-sonnet-latest'
+            max_tokens: 16000
+            temperature: 0
+            tools:
+              - name: experimental.sympy_calculator
+              - name: nodes.SubApplicationTool
+                init_kwargs:
+                  filter_tool_response_channels: false
+                  timeout: 1000
+                  application_variant_id: 6747c9a5-d515-49cc-90b2-897c954c976a
+                  application_description: >-
+                    Compute the Great Circle distance in km between two pairs of
+                    coordinates in degrees.
+            mcp_servers:
+              - type: streamable_http
+                url: https://mcpx.staging.scalegov.com/@aw/mongodb-mcp/mcp
+          inputs:
+            messages: messages
+        - name: append_tool_response
+          type: insert_messages
+          config:
+            index: -1
+          inputs:
+            messages: messages
+            new_messages: Agent
+        - name: decrement_loop_counter
+          type: data_transform
+          config:
+            action: int_adder
+            additional_inputs:
+              'y': -1
+          inputs:
+            response: max_loops
+    write_to_state:
+      messages: append_tool_response
+      max_loops: decrement_loop_counter
+    next_node:
+      default: ChatAgent
+id: 51f91cbb-9bf9-42f5-9216-9d38b6a5730f

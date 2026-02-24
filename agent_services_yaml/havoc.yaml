@@ -1,0 +1,93 @@
+  version: 0.1.0
+  description: >-
+    Demo application that generates rich reports with charts and maps using MCP
+    tools, then enables chat for iterative refinement. Includes MongoDB MCP server
+    for data access.
+  report_edit_mcp_base_url: https://mcpx.staging.scalegov.com/@aw/report-mcp
+  subtype: multi_agent
+  chat_app_name: '[AY] Report Generation Chat (MongoDB)'
+  starting_node: workflow
+  machine:
+    workflow:
+      workflow_config:
+        streaming_nodes:
+          - node: Report Generator
+            channel_name: Report Generator
+            channel_type: messages
+            cast_mode:
+              mode: auto
+        user_input:
+          user_prompt:
+            title: What should the report be about?
+            type: ParagraphText
+            default: >-
+              Generate a comprehensive quarterly business performance report with
+              sample data.
+            description: >-
+              Describe the report you want to generate. The AI will generate an
+              initial report based on your request.
+        workflow:
+          - name: Report Generator
+            type: tool_generation
+            config:
+              model: openai/gpt-4o
+              max_tokens: 8192
+              temperature: 0.7
+              max_turns: 10
+              mcp_servers:
+                - type: streamable_http
+                  url: https://mcpx.staging.scalegov.com/@aw/report-mcp/mcp
+                  auth:
+                    type: sgp_client
+                - type: streamable_http
+                  url: https://mcpx.staging.scalegov.com/@aw/mongodb-mcp/mcp
+                  timeout: '60'
+                  sse_read_timeout: '60'
+                  auth:
+                    type: sgp_client
+            inputs:
+              messages:
+                - role: '!system'
+                  content: >
+                    !You are an expert report generator. Your task is to create a
+                    comprehensive, professional report based on the user's
+                    request.
+
+                    ## Report Structure
+
+
+                    Generate the report with:
+
+                    - A clear title (# heading)
+
+                    - 3-4 well-organized main sections (## headings)
+
+                    - Professional, comprehensive content
+
+                    - Proper markdown formatting (bullet points, bold/italic,
+                    subheadings)
+
+
+                    ## Content Guidelines
+
+
+                    - Write in a professional, authoritative tone
+
+                    - Include relevant details and analysis
+
+                    - Make it comprehensive but readable
+
+                    - Include data points and metrics in the text (e.g., "Revenue
+                    increased 15% YoY")
+
+
+                    Remember: Output the full report as markdown text in your
+                    response. Do not use any tools.
+                - role: '!user'
+                  content: user_prompt
+      write_to_state:
+        document: Report Generator
+      next_node:
+        default: __end__
+  account_id: 67af7fb8adc30568d62b5e78
+  id: fb59121d-246b-4f61-be94-c8e0649da4db

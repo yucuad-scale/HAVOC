@@ -1,0 +1,803 @@
+version: 0.1.2
+description: >-
+  This agent accepts a mission statement or scenario and uses multiple
+  sub-agents to generate a mission analysis brief.
+application_name_override: '[BETA] Mission Analysis'
+type: state_machine
+subtype: multi_agent
+customer: donovan
+use_case: document_generation
+global_state_overrides:
+  state:
+    model: openai/gpt-4o
+    max_tokens: 8192
+  current_node: start
+global_state_overrides_input:
+  state:
+    model: '!openai/gpt-4o'
+    max_tokens: 8192
+  current_node: '!start'
+revise_agent_map:
+  Adversarial Red Teaming:
+    id: application_store/revise/j2_adversarial_red_teaming
+    inputs:
+      knowledge_base_ids:
+        - f97f7cf6-52f8-445f-b8ed-21a73b6be8c0
+      initial_state_override:
+        state:
+          model: openai/gpt-4o
+          max_tokens: 8192
+        current_node: start
+  Logistics Assessment:
+    id: application_store/revise/j4_feasibility_and_logistics_assessment
+    inputs:
+      knowledge_base_ids:
+        - 4638c090-d90b-458c-9463-e342962cba64
+      initial_state_override:
+        state:
+          model: openai/gpt-4o
+          max_tokens: 8192
+        current_node: start
+  Interagency Supplement:
+    id: application_store/revise/interagency_supplement
+    inputs:
+      initial_state_override:
+        state:
+          model: openai/gpt-4o
+          max_tokens: 8192
+        current_node: start
+initial_state:
+  mission_title: ''
+  document: ''
+  scenario: ''
+  edit_description: >-
+    Provide any edits to the document before continuing with the next agent
+    group.
+  revise_agent_map:
+    Adversarial Red Teaming:
+      id: application_store/revise/j2_adversarial_red_teaming
+      inputs:
+        knowledge_base_ids:
+          - f97f7cf6-52f8-445f-b8ed-21a73b6be8c0
+        initial_state_override:
+          state:
+            model: openai/gpt-4o
+            max_tokens: 8192
+          current_node: start
+    Logistics Assessment:
+      id: application_store/revise/j4_feasibility_and_logistics_assessment
+      inputs:
+        knowledge_base_ids:
+          - 4638c090-d90b-458c-9463-e342962cba64
+        initial_state_override:
+          state:
+            model: openai/gpt-4o
+            max_tokens: 8192
+          current_node: start
+    Interagency Supplement:
+      id: application_store/revise/interagency_supplement
+      inputs:
+        initial_state_override:
+          state:
+            model: openai/gpt-4o
+            max_tokens: 8192
+          current_node: start
+  global_state_overrides:
+    state:
+      model: openai/gpt-4o
+      max_tokens: 8192
+    current_node: start
+starting_node: Start
+machine:
+  Start:
+    workflow_config:
+      final_output_nodes:
+        - response::intermediate_thoughts::Lead Planning Agent::header
+        - response::intermediate_thoughts::Lead Planning Agent
+        - response::intermediate_thoughts::Lead Planning Agent::complete
+        - draft_document
+      streaming_nodes:
+        - response::intermediate_thoughts::Lead Planning Agent::header
+        - response::intermediate_thoughts::Lead Planning Agent
+        - response::intermediate_thoughts::Lead Planning Agent::complete
+        - draft_document
+      user_input:
+        title:
+          title: Title
+          type: ShortText
+        mission_statement:
+          title: Mission Statement
+          type: ParagraphText
+          description: Provide a mission statement or scenario.
+        file_ids:
+          type: ArtifactIds
+          title: Upload File
+          description: Upload any supporting files
+          default: ''
+      workflow:
+        - name: response::intermediate_thoughts::Lead Planning Agent::header
+          type: static
+          config:
+            value: Generate J5 Mission Analysis Brief
+        - name: response::intermediate_thoughts::Lead Planning Agent
+          type: static
+          config:
+            value: Generating initial draft of Mission Analysis Briefing
+        - name: read_files
+          type: file_reader
+          config:
+            decode_as: utf-8
+          inputs:
+            file: file_ids
+        - name: augment_mission_statement
+          type: jinja
+          config:
+            output_template:
+              jinja_template_str: |-
+                {{ mission_statement }}
+                {% if files %}
+
+                Supporting files:
+
+                {{ files }}
+                {% endif %}
+          inputs:
+            mission_statement: mission_statement
+            files: read_files.output
+        - name: generate_j5_brief
+          type: sub_application
+          inputs:
+            application_name: '!application_store/documents/generate_j5_mission_analysis_brief'
+            application_kwargs:
+              input: augment_mission_statement.output
+              initial_state_override:
+                state:
+                  model: '!openai/gpt-4o'
+                  max_tokens: 8192
+                current_node: '!start'
+            __max_depth__: 1
+        - name: draft_document
+          type: jinja
+          config:
+            output_template:
+              jinja_template_str: '{{ response.document }}'
+          inputs:
+            response: generate_j5_brief.output
+        - name: response::intermediate_thoughts::Lead Planning Agent::complete
+          type: jinja
+          config:
+            output_template:
+              jinja_template_str: >-
+                Finished generating J5 Mission Analysis Brief. Here's a snippet
+                of the document:
+
+                {{ document[:100] }} ...
+          inputs:
+            document: draft_document.output
+    write_to_state:
+      mission_title: title
+      document: draft_document
+      scenario: augment_mission_statement
+    next_node:
+      default: Lead Planning Agent
+  Lead Planning Agent:
+    workflow_config:
+      final_output_nodes:
+        - intermediate_thoughts::Adversarial Red Teaming::suggested_edit::header
+        - intermediate_thoughts::Adversarial Red Teaming::suggested_edit
+        - Adversarial Red Teaming::suggested_edit
+        - >-
+          intermediate_thoughts::Adversarial Red
+          Teaming::suggested_edit::complete
+        - intermediate_thoughts::Logistics Assessment::suggested_edit::header
+        - intermediate_thoughts::Logistics Assessment::suggested_edit
+        - Logistics Assessment::suggested_edit
+        - intermediate_thoughts::Logistics Assessment::suggested_edit::complete
+        - intermediate_thoughts::Interagency Supplement::suggested_edit::header
+        - intermediate_thoughts::Interagency Supplement::suggested_edit
+        - Interagency Supplement::suggested_edit
+        - >-
+          intermediate_thoughts::Interagency
+          Supplement::suggested_edit::complete
+        - intermediate_thoughts::Plan Validation::header
+        - Plan Validation::output
+        - intermediate_thoughts::Plan Validation::complete
+      streaming_nodes:
+        - intermediate_thoughts::Adversarial Red Teaming::suggested_edit::header
+        - intermediate_thoughts::Adversarial Red Teaming::suggested_edit
+        - Adversarial Red Teaming::suggested_edit
+        - >-
+          intermediate_thoughts::Adversarial Red
+          Teaming::suggested_edit::complete
+        - intermediate_thoughts::Logistics Assessment::suggested_edit::header
+        - intermediate_thoughts::Logistics Assessment::suggested_edit
+        - Logistics Assessment::suggested_edit
+        - intermediate_thoughts::Logistics Assessment::suggested_edit::complete
+        - intermediate_thoughts::Interagency Supplement::suggested_edit::header
+        - intermediate_thoughts::Interagency Supplement::suggested_edit
+        - Interagency Supplement::suggested_edit
+        - >-
+          intermediate_thoughts::Interagency
+          Supplement::suggested_edit::complete
+        - intermediate_thoughts::Plan Validation::header
+        - intermediate_thoughts::Plan Validation
+        - Plan Validation::output
+        - intermediate_thoughts::Plan Validation::complete
+      workflow:
+        - name: adversarial_red_teaming::get_agent_value
+          type: processor
+          config:
+            return_key: get_value
+            function_specs:
+              get_value:
+                path: call_method
+                kwargs:
+                  object: object
+                  method: get
+                  args: args
+          inputs:
+            object: revise_agent_map
+            args:
+              - '!Adversarial Red Teaming'
+        - name: adversarial_red_teaming::get_agent_ids
+          type: processor
+          config:
+            return_key: get_value
+            function_specs:
+              get_value:
+                path: call_method
+                kwargs:
+                  object: object
+                  method: get
+                  args:
+                    - id
+          inputs:
+            object: adversarial_red_teaming::get_agent_value.output
+        - name: adversarial_red_teaming::get_agent_inputs
+          type: processor
+          config:
+            return_key: get_value
+            function_specs:
+              get_value:
+                path: call_method
+                kwargs:
+                  object: object
+                  method: get
+                  args:
+                    - inputs
+                    - {}
+          inputs:
+            object: adversarial_red_teaming::get_agent_value.output
+        - name: adversarial_red_teaming::get_agent_inputs_with_document
+          type: processor
+          config:
+            return_key: add_document
+            function_specs:
+              add_document:
+                path: call_method
+                kwargs:
+                  object: object
+                  method: __or__
+                  args: args
+          inputs:
+            object: adversarial_red_teaming::get_agent_inputs.output
+            args:
+              - document: document
+        - name: >-
+            intermediate_thoughts::Adversarial Red
+            Teaming::suggested_edit::header
+          type: static
+          config:
+            value: Running Adversarial Red Teaming Red Teaming Agent
+        - name: intermediate_thoughts::Adversarial Red Teaming::suggested_edit
+          type: static
+          config:
+            value: >-
+              Analyzing Mission Analysis for potential adversary actions and
+              countermeasures.
+        - name: adversarial_red_teaming::run_revise_agents
+          type: sub_application
+          inputs:
+            application_name: adversarial_red_teaming::get_agent_ids.output
+            application_kwargs: adversarial_red_teaming::get_agent_inputs_with_document.output
+            __max_depth__: 1
+        - name: adversarial_red_teaming::format_edits
+          type: jinja
+          config:
+            output_template:
+              jinja_template_str: '{{ revise_results.edits }}'
+          inputs:
+            revise_results: adversarial_red_teaming::run_revise_agents.output
+        - name: Adversarial Red Teaming::suggested_edit
+          type: chat_generation
+          config:
+            llm_model: gpt-4o
+            max_tokens: 1024
+            temperature: 0
+            instructions: >-
+              You will be given a list of edits from an agent. Provide a
+              detailed summary of the edits. Just include the summary. The
+              summary should be formatted into markdown and broken into each
+              discrete summary in the edits list (list items may have multiple
+              implied edits). Each edit should come under a 4th level header
+              (####) with the section name it is editing. Sections should be
+              separated with line breaks and four dashes '----'. It is okay for
+              multiple headers to have the same section name if a section has
+              multiple edits. If the edits do not belong to a section, then come
+              up with a brief relevant section title based on those edits.
+            memory_strategy:
+              name: last_k
+              params:
+                k: 999
+          inputs:
+            messages:
+              - role: '!user'
+                content: adversarial_red_teaming::format_edits.output
+        - name: >-
+            intermediate_thoughts::Adversarial Red
+            Teaming::suggested_edit::complete
+          type: jinja
+          config:
+            output_template:
+              jinja_template_str: Done
+          inputs:
+            await: Adversarial Red Teaming::suggested_edit
+        - name: logistics_assessment::get_agent_value
+          type: processor
+          config:
+            return_key: get_value
+            function_specs:
+              get_value:
+                path: call_method
+                kwargs:
+                  object: object
+                  method: get
+                  args: args
+          inputs:
+            object: revise_agent_map
+            args:
+              - '!Logistics Assessment'
+        - name: logistics_assessment::get_agent_ids
+          type: processor
+          config:
+            return_key: get_value
+            function_specs:
+              get_value:
+                path: call_method
+                kwargs:
+                  object: object
+                  method: get
+                  args:
+                    - id
+          inputs:
+            object: logistics_assessment::get_agent_value.output
+        - name: logistics_assessment::get_agent_inputs
+          type: processor
+          config:
+            return_key: get_value
+            function_specs:
+              get_value:
+                path: call_method
+                kwargs:
+                  object: object
+                  method: get
+                  args:
+                    - inputs
+                    - {}
+          inputs:
+            object: logistics_assessment::get_agent_value.output
+        - name: logistics_assessment::get_agent_inputs_with_document
+          type: processor
+          config:
+            return_key: add_document
+            function_specs:
+              add_document:
+                path: call_method
+                kwargs:
+                  object: object
+                  method: __or__
+                  args: args
+          inputs:
+            object: logistics_assessment::get_agent_inputs.output
+            args:
+              - document: document
+        - name: intermediate_thoughts::Logistics Assessment::suggested_edit::header
+          type: static
+          config:
+            value: Running J4 Feasibility and Logistics Assessment Agent
+        - name: intermediate_thoughts::Logistics Assessment::suggested_edit
+          type: static
+          config:
+            value: >-
+              Analyzing logistical supportability and sustainability of the
+              mission.
+        - name: logistics_assessment::run_revise_agents
+          type: sub_application
+          inputs:
+            application_name: logistics_assessment::get_agent_ids.output
+            application_kwargs: logistics_assessment::get_agent_inputs_with_document.output
+            __max_depth__: 1
+        - name: logistics_assessment::format_edits
+          type: jinja
+          config:
+            output_template:
+              jinja_template_str: '{{ revise_results.edits }}'
+          inputs:
+            revise_results: logistics_assessment::run_revise_agents.output
+        - name: Logistics Assessment::suggested_edit
+          type: chat_generation
+          config:
+            llm_model: gpt-4o
+            max_tokens: 1024
+            temperature: 0
+            instructions: >-
+              You will be given a list of edits from an agent. Provide a
+              detailed summary of the edits. Just include the summary. The
+              summary should be formatted into markdown and broken into each
+              discrete summary in the edits list (list items may have multiple
+              implied edits). Each edit should come under a 4th level header
+              (####) with the section name it is editing. Sections should be
+              separated with line breaks and four dashes '----'. It is okay for
+              multiple headers to have the same section name if a section has
+              multiple edits. If the edits do not belong to a section, then come
+              up with a brief relevant section title based on those edits.
+            memory_strategy:
+              name: last_k
+              params:
+                k: 999
+          inputs:
+            messages:
+              - role: '!user'
+                content: logistics_assessment::format_edits.output
+        - name: >-
+            intermediate_thoughts::Logistics
+            Assessment::suggested_edit::complete
+          type: jinja
+          config:
+            output_template:
+              jinja_template_str: Done
+          inputs:
+            await: Logistics Assessment::suggested_edit
+        - name: interagency_supplement::get_agent_value
+          type: processor
+          config:
+            return_key: get_value
+            function_specs:
+              get_value:
+                path: call_method
+                kwargs:
+                  object: object
+                  method: get
+                  args: args
+          inputs:
+            object: revise_agent_map
+            args:
+              - '!Interagency Supplement'
+        - name: interagency_supplement::get_agent_ids
+          type: processor
+          config:
+            return_key: get_value
+            function_specs:
+              get_value:
+                path: call_method
+                kwargs:
+                  object: object
+                  method: get
+                  args:
+                    - id
+          inputs:
+            object: interagency_supplement::get_agent_value.output
+        - name: interagency_supplement::get_agent_inputs
+          type: processor
+          config:
+            return_key: get_value
+            function_specs:
+              get_value:
+                path: call_method
+                kwargs:
+                  object: object
+                  method: get
+                  args:
+                    - inputs
+                    - {}
+          inputs:
+            object: interagency_supplement::get_agent_value.output
+        - name: interagency_supplement::get_agent_inputs_with_document
+          type: processor
+          config:
+            return_key: add_document
+            function_specs:
+              add_document:
+                path: call_method
+                kwargs:
+                  object: object
+                  method: __or__
+                  args: args
+          inputs:
+            object: interagency_supplement::get_agent_inputs.output
+            args:
+              - document: document
+        - name: >-
+            intermediate_thoughts::Interagency
+            Supplement::suggested_edit::header
+          type: static
+          config:
+            value: Running Interagency Supplement Supplement Agent
+        - name: intermediate_thoughts::Interagency Supplement::suggested_edit
+          type: static
+          config:
+            value: >-
+              Enhancing provided plans with interagency considerations and
+              coordination requirements.
+        - name: interagency_supplement::run_revise_agents
+          type: sub_application
+          inputs:
+            application_name: interagency_supplement::get_agent_ids.output
+            application_kwargs: interagency_supplement::get_agent_inputs_with_document.output
+            __max_depth__: 1
+        - name: interagency_supplement::format_edits
+          type: jinja
+          config:
+            output_template:
+              jinja_template_str: '{{ revise_results.edits }}'
+          inputs:
+            revise_results: interagency_supplement::run_revise_agents.output
+        - name: Interagency Supplement::suggested_edit
+          type: chat_generation
+          config:
+            llm_model: gpt-4o
+            max_tokens: 1024
+            temperature: 0
+            instructions: >-
+              You will be given a list of edits from an agent. Provide a
+              detailed summary of the edits. Just include the summary. The
+              summary should be formatted into markdown and broken into each
+              discrete summary in the edits list (list items may have multiple
+              implied edits). Each edit should come under a 4th level header
+              (####) with the section name it is editing. Sections should be
+              separated with line breaks and four dashes '----'. It is okay for
+              multiple headers to have the same section name if a section has
+              multiple edits. If the edits do not belong to a section, then come
+              up with a brief relevant section title based on those edits.
+            memory_strategy:
+              name: last_k
+              params:
+                k: 999
+          inputs:
+            messages:
+              - role: '!user'
+                content: interagency_supplement::format_edits.output
+        - name: >-
+            intermediate_thoughts::Interagency
+            Supplement::suggested_edit::complete
+          type: jinja
+          config:
+            output_template:
+              jinja_template_str: Done
+          inputs:
+            await: Interagency Supplement::suggested_edit
+        - name: collect_edits
+          type: data_transform
+          config:
+            action: identity
+          inputs:
+            response:
+              - adversarial_red_teaming::format_edits.output
+              - logistics_assessment::format_edits.output
+              - interagency_supplement::format_edits.output
+        - name: intermediate_thoughts::Plan Validation::header
+          type: static
+          config:
+            value: Assessing Mission Analysis Brief
+        - name: intermediate_thoughts::Plan Validation
+          type: static
+          config:
+            value: Running an assessment on initial mission analysis draft.
+        - name: validation_run
+          type: sub_application
+          inputs:
+            application_name: '!application_store/ma_assessment'
+            application_kwargs:
+              mission_analysis: document
+              scenario: scenario
+            __max_depth__: 1
+          config:
+            timeout: 600
+        - name: Plan Validation::output
+          type: jinja
+          config:
+            output_template:
+              jinja_template_str: '{{  results.llm_call  }}'
+          inputs:
+            results: validation_run
+        - name: intermediate_thoughts::Plan Validation::complete
+          type: jinja
+          config:
+            output_template:
+              jinja_template_str: Assessment complete
+          inputs:
+            await: Plan Validation::output
+        - name: format_summaries
+          type: jinja
+          config:
+            output_template:
+              jinja_template_str: |
+                {{ adversarial_red_teaming_summaries }}
+
+                {{ logistics_assessment_summaries }}
+
+                {{ interagency_supplement_summaries }}
+          inputs:
+            adversarial_red_teaming_summaries: Adversarial Red Teaming::suggested_edit
+            logistics_assessment_summaries: Logistics Assessment::suggested_edit
+            interagency_supplement_summaries: Interagency Supplement::suggested_edit
+    write_to_state:
+      edits_list: collect_edits
+    next_node:
+      default: Lead Planning Agent::Apply Suggested Edits
+  Lead Planning Agent::Apply Suggested Edits:
+    workflow_config:
+      final_output_nodes:
+        - response::intermediate_thoughts::Consolidate Edits::header
+        - response::intermediate_thoughts::Consolidate Edits
+      streaming_nodes:
+        - response::intermediate_thoughts::Consolidate Edits::header
+        - response::intermediate_thoughts::Consolidate Edits
+      workflow:
+        - name: response::intermediate_thoughts::Consolidate Edits::header
+          type: static
+          config:
+            value: Reconciling edits
+        - name: response::intermediate_thoughts::Consolidate Edits
+          type: jinja
+          config:
+            output_template:
+              jinja_template_str: >-
+                {% set agents = [] %}
+
+                {% if adversarial_red_teaming %}
+                  {% set _ = agents.append("Adversarial Red Teaming") %}
+                {% endif %}
+
+                {% if logistics_assessment %}
+                  {% set _ = agents.append("Logistics Assessment") %}
+                {% endif %}
+
+                {% if interagency_supplement %}
+                  {% set _ = agents.append("Interagency Supplement") %}
+                {% endif %}
+
+                {% if agents %}
+
+                Finalizing the report after taking inputs from: {{ agents |
+                join(", ") }}.
+
+                {% else %}
+
+                No edits to consolidate, finalizing the report.
+
+                {% endif %}
+          inputs:
+            adversarial_red_teaming: Adversarial Red Teaming::is_edits_accepted
+            logistics_assessment: Logistics Assessment::is_edits_accepted
+            interagency_supplement: interagency_supplement::is_edits_accepted
+        - name: filter_edits
+          type: jinja
+          config:
+            output_template:
+              jinja_template_str: |-
+                {% if adversarial_red_teaming %}
+                {{ edits_list[0] }}
+                {% endif %}
+                {% if logistics_assessment %}
+                {{ edits_list[1] }}
+                {% endif %}
+                {% if interagency_supplement %}
+                {{ edits_list[2] }}
+                {% endif %}
+          inputs:
+            edits_list: edits_list
+            adversarial_red_teaming: Adversarial Red Teaming::is_edits_accepted
+            logistics_assessment: Logistics Assessment::is_edits_accepted
+            interagency_supplement: interagency_supplement::is_edits_accepted
+        - name: apply_edits
+          type: sub_application
+          inputs:
+            application_name: '!application_store/documents/apply_edits'
+            application_kwargs:
+              document: document
+              edits: filter_edits.output
+              initial_state_override:
+                state:
+                  model: '!openai/gpt-4o'
+                  max_tokens: 8192
+                current_node: '!start'
+            __max_depth__: 1
+        - name: updated_document
+          type: jinja
+          config:
+            output_template:
+              jinja_template_str: '{{ apply_edits_response.response }}'
+          inputs:
+            apply_edits_response: apply_edits.output
+    write_to_state:
+      document: updated_document
+    next_node:
+      default: Lead Planning Agent::Validation
+  Lead Planning Agent::Validation:
+    workflow_config:
+      streaming_nodes:
+        - intermediate_thoughts::Plan Validation::header
+        - Plan Validation::output
+        - intermediate_thoughts::Plan Validation::complete
+      final_output_nodes:
+        - intermediate_thoughts::Plan Validation::header
+        - Plan Validation::output
+        - intermediate_thoughts::Plan Validation::complete
+      workflow:
+        - name: intermediate_thoughts::Plan Validation::header
+          type: static
+          config:
+            value: Assessing Mission Analysis Brief
+        - name: intermediate_thoughts::Plan Validation
+          type: static
+          config:
+            value: Running an assessment on initial mission analysis draft.
+        - name: validation_run
+          type: sub_application
+          inputs:
+            application_name: '!application_store/ma_assessment'
+            application_kwargs:
+              mission_analysis: document
+              scenario: scenario
+            __max_depth__: 1
+          config:
+            timeout: 600
+        - name: Plan Validation::output
+          type: jinja
+          config:
+            output_template:
+              jinja_template_str: '{{  results.llm_call  }}'
+          inputs:
+            results: validation_run
+        - name: intermediate_thoughts::Plan Validation::complete
+          type: jinja
+          config:
+            output_template:
+              jinja_template_str: Assessment complete
+          inputs:
+            await: Plan Validation::output
+    next_node:
+      default: Lead Planning Agent::Apply Edits
+  Lead Planning Agent::Apply Edits:
+    workflow_config:
+      streaming_nodes:
+        - llm_call
+      final_output_nodes:
+        - llm_call
+      user_input:
+        edited_document:
+          title: Proposed Mission Analysis Brief
+          state_machine_ref_for_default: document
+          type: ParagraphText
+      workflow:
+        - name: llm_call
+          type: jinja
+          config:
+            output_template:
+              jinja_template_str: '{{ final_document }}'
+          inputs:
+            title: mission_title
+            final_document: edited_document
+    write_to_state:
+      document: llm_call
+    next_node:
+      default: Lead Planning Agent::Validation
+config_hash: 54ff3a00b7c52a4dafbf8db1c5efcfa66308ae29b1092c26b570c18b2dfc5a9d
+account_id: 68b9ac15fea04e89975257dd
+metadata:
+  last_update: '2025-09-04T21:06:46.740655+00:00'
+  git_branch: master
+  git_user: Kinam Park
+  git_commit: 1c1ab3e3dc
+id: 022cf790-24fc-4476-8431-27a2f467c055
