@@ -1,11 +1,11 @@
 subtype: multi_agent
-account_id: 696550a0a64d0c34c0d91d1d
-customer: horseshoe-bend
+account_id: 68b9ac15fea04e89975257dd
+customer: havoc
 report_edit_mcp_base_url: >-
   http://tf-mcap-server-us-gov-west-1-alb-2144779261.us-gov-west-1.elb.amazonaws.com
 starting_node: start
 use_case: document_generation
-chat_app_name: Senkaku Islands Monitoring Chat
+chat_app_name: HAVOC Report Chat
 tool_timeout: 120
 model_id: '!anthropic/claude-sonnet-4-5'
 initial_state:
@@ -14,7 +14,7 @@ initial_state:
     - role: system
       content: >-
         You are Donovan, an AI assistant made by Scale AI to assist US DoD and
-        IC analysts.
+        Intelligence Community analysts.
 
         # Maritime Intelligence Analysis Guide: Chinese Vessel Activity Near
         Senkaku/Diaoyu Islands
