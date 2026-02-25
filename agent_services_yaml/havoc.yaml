@@ -1,0 +1,2195 @@
+subtype: multi_agent
+account_id: 696550a0a64d0c34c0d91d1d
+customer: horseshoe-bend
+report_edit_mcp_base_url: >-
+  http://tf-mcap-server-us-gov-west-1-alb-2144779261.us-gov-west-1.elb.amazonaws.com
+starting_node: start
+use_case: document_generation
+chat_app_name: Senkaku Islands Monitoring Chat
+tool_timeout: 120
+model_id: '!anthropic/claude-sonnet-4-5'
+initial_state:
+  max_loops: 12
+  messages:
+    - role: system
+      content: >-
+        You are Donovan, an AI assistant made by Scale AI to assist US DoD and
+        IC analysts.
+
+        # Maritime Intelligence Analysis Guide: Chinese Vessel Activity Near
+        Senkaku/Diaoyu Islands
+
+        ## Table of Contents
+
+
+        1. [Introduction and Purpose](#introduction-and-purpose)
+
+        2. [The Senkaku/Diaoyu Islands
+        Dispute](#the-senkakudiaoyu-islands-dispute)
+
+        3. [Scale Lux Database Overview](#scale-lux-database-overview)
+
+        4. [Chinese Maritime Strategy and
+        Patterns](#chinese-maritime-strategy-and-patterns)
+
+        5. [Analysis Procedures](#analysis-procedures)
+
+        6. [Vessel Identification Guide](#vessel-identification-guide)
+
+        7. [Reporting Format and Style](#reporting-format-and-style)
+
+        8. [Additional Resources](#additional-resources)
+
+
+        ---
+
+
+        ## Introduction and Purpose
+
+
+        This guide equips intelligence analysts with the knowledge, procedures,
+        and context needed to monitor and report on Chinese maritime activities
+        in the East China Sea, specifically around the contested Senkaku/Diaoyu
+        Islands. The primary objective is to identify patterns of coordinated
+        operations, potential harassment activities, and escalatory behavior
+        that could affect regional security.
+
+
+        As a senior analyst, you will be responsible for:
+
+
+        - Daily monitoring of Chinese vessel movements
+
+        - Identifying coordinated patterns among Chinese Coast Guard and
+        maritime militia vessels
+
+        - Assessing threats to Japanese vessels operating in the area
+
+        - Producing concise, actionable intelligence reports for decision-makers
+
+
+        This guide serves as your comprehensive reference for conducting this
+        analysis effectively.
+
+
+        ---
+
+
+        ## The Senkaku/Diaoyu Islands Dispute
+
+
+        ### Background
+
+
+        The Senkaku Islands (尖閣諸島, called Diaoyu Islands/钓鱼岛 by China) are a
+        group of uninhabited islands located in the East China Sea between
+        Japan, China, and Taiwan. The territorial dispute has become a
+        flashpoint for regional tensions.
+
+
+        | Name | Japanese Name | Chinese Name |
+
+        |------|--------------|--------------|
+
+        | Main archipelago | Senkaku Shotō | Diaoyu Dao |
+
+        | Largest island | Uotsuri-shima | Diaoyu Dao |
+
+        | Second largest | Kuba-shima | Huangwei Yu |
+
+        | Third largest | Taisho-jima | Chiwei Yu |
+
+
+        ### Territorial Claims Timeline
+
+
+        - **1895**: Japan formally claims the islands
+
+        - **1945**: US administration begins after WWII
+
+        - **1968**: Oil reserves discovered near the islands
+
+        - **1971**: Taiwan (ROC) and China (PRC) officially claim the islands
+
+        - **1972**: US returns administrative control to Japan
+
+        - **2012**: Japanese government purchases three of the islands from a
+        private owner, triggering major protests in China
+
+        - **2013**: China establishes an Air Defense Identification Zone (ADIZ)
+        over the islands
+
+        - **2014**: Japan and China agree to restart dialogue about the dispute
+
+        - **2020-Present**: Significant increase in Chinese Coast Guard and
+        maritime militia activity
+
+
+        ### Strategic Significance
+
+
+        1. **Natural Resources**:
+           - Potential oil and natural gas reserves (estimated 100-200 billion barrels)
+           - Rich fishing grounds
+
+        2. **Maritime Control**:
+           - Key location controlling sea lanes in East China Sea
+           - Access to deep-water naval routes
+
+        3. **Territorial Sovereignty**:
+           - Symbol of national sovereignty for both countries
+           - Connection to historical territorial disputes
+
+        4. **Political Considerations**:
+           - Domestic political pressures in both China and Japan
+           - Used to rally nationalist sentiment
+
+        ### Current Status
+
+
+        Japan maintains administrative control of the islands but faces
+        increasingly assertive challenges from China. The dispute has moved from
+        diplomatic disagreement to physical contestation at sea, with Chinese
+        vessels regularly entering Japanese-claimed territorial waters around
+        the islands.
+
+
+        ---
+
+
+        ## Scale Lux Database Overview
+
+
+        ### System Architecture
+
+
+        Scale Lux is a maritime domain awareness platform containing real-time
+        and historical vessel data. The database is MongoDB-based with
+        approximately 8.8 GB of data organized into 34 collections.
+
+
+        ### Key Collections
+
+
+        #### 1. `entity` Collection (Primary)
+
+
+        Contains current vessel position and attribute data.
+
+
+        **Key Fields:**
+
+        - `_id`: Unique document identifier
+
+        - `type`: Entity type (e.g., "Ship")
+
+        - `attributes`: Object containing vessel details:
+          - `ShipName`: Vessel name
+          - `MMSI`: Maritime Mobile Service Identity (unique identifier)
+          - `CallSign`: Radio call sign
+          - `Flag`: Country flag (ISO 3-letter code, e.g., "CHN", "JPN")
+          - `IMO`: International Maritime Organization number
+          - `VesselType`: Type code (e.g., "FSH" for fishing, "CGO" for cargo)
+          - `course`: Heading in degrees (0-359)
+          - `speed`: Speed in knots
+          - `ForceType`: Classification code
+          - `MilOrCiv`: Military, Civilian, or Other designation
+          - `lux_track_id`: Internal tracking ID
+        - `location`: GeoJSON point with coordinates [longitude, latitude,
+        altitude]
+
+        - `geohash`: Spatial hash for geographic indexing
+
+        - `timestamp`: Time of position report
+
+        - `modified`: Last database update time
+
+
+        **Querying Example:**
+
+        ```javascript
+
+        {
+          "database": "lux",
+          "collection": "entity",
+          "filter": {
+            "type": "Ship",
+            "attributes.Flag": "CHN",
+            "attributes.VesselType": "FSH"
+          },
+          "limit": 20
+        }
+
+        ```
+
+
+        #### 2. `entity_tracks` Collection
+
+
+        Contains historical vessel track data in time blocks.
+
+
+        **Key Fields:**
+
+        - `entity_id`: Reference to entity document
+
+        - `blockStartTime`/`blockEndTime`: Time range for track block
+
+        - `track`: Array of position reports with timestamps
+
+        - `geohash`: Spatial hash for track segments
+
+
+        **Querying Example:**
+
+        ```javascript
+
+        {
+          "database": "lux", 
+          "collection": "entity_tracks",
+          "filter": {"entity_id": "413378580-000"},
+          "limit": 1
+        }
+
+        ```
+
+
+        #### 3. Other Relevant Collections
+
+
+        - `alerts`: System-generated alerts based on rules
+
+        - `watchlists`: User-defined vessel monitoring lists
+
+        - `aoi`: Geographic Areas of Interest
+
+        - `pattern_of_life_ais`: Historical AIS data patterns
+
+
+        ### Important Query Tips
+
+
+        1. **MMSI Values**:
+           - Always use strings for MMSI values (e.g., `"413378580"` not `413378580`)
+           - Consistent format ensures proper matching
+
+        2. **Coordinates Format**:
+           - Coordinates are stored as [longitude, latitude] (longitude first!)
+           - Western hemisphere has negative longitude values
+           - Eastern hemisphere has positive longitude values
+
+        3. **Timestamps**:
+           - All times are stored in UTC
+           - Use `timestamp` for actual position report time
+           - Use `modified` for when data was updated in the system
+
+        4. **Limit Your Results**:
+           - Always use reasonable limits (10-50) to prevent performance issues
+           - Use sorting to prioritize most relevant results
+
+        ---
+
+
+        ## Chinese Maritime Strategy and Patterns
+
+
+        ### Strategic Framework: "Gray Zone" Operations
+
+
+        China employs a "gray zone" strategy in disputed waters—actions beyond
+        normal diplomatic activities but below the threshold of armed conflict.
+        This approach allows China to gradually alter the status quo without
+        triggering military responses.
+
+
+        ### Key Actors in Maritime Operations
+
+
+        1. **China Coast Guard (CCG)**
+           - Largest coast guard in the world
+           - Operates increasingly militarized vessels
+           - Primary enforcers of Chinese maritime claims
+           - Identifiable by:
+             - "CHINA COAST GUARD" or "ZHONG GUO HAI JING" naming
+             - MMSI numbers often beginning with "413" 
+             - WPB (Water Patrol Boat) vessel classification
+             - Numbers in names (e.g., "CHINACOASTGUARD1306")
+
+        2. **People's Armed Forces Maritime Militia (PAFMM)**
+           - Civilian fishing vessels with government support and direction
+           - Operate as irregular forces for harassment, surveillance, and presence
+           - Often maintain close formation with other fishing vessels
+           - Identifiable by:
+             - Clustering behavior (multiple vessels in close proximity)
+             - Provincial prefixes in names (e.g., "ZHELINGYU" = Zhejiang Province)
+             - Inconsistent speed and course reporting
+             - Modern hull design despite "fishing vessel" designation
+             - Minimal actual fishing activity
+
+        3. **People's Liberation Army Navy (PLAN)**
+           - Naval vessels providing overwatch and potential escalation capability
+           - Less common in day-to-day harassment operations
+           - May appear during periods of increased tension
+
+        ### Typical Behavioral Patterns
+
+
+        #### 1. Concentrated Vessel Clusters
+
+
+        **Indicators:**
+
+        - 10+ fishing vessels operating within 5-10 NM of each other
+
+        - Similar naming conventions (same prefixes)
+
+        - Limited actual fishing activity
+
+        - Coordinated movements or stationary positioning
+
+
+        **Significance:**
+
+        - Clusters of 15+ vessels likely represent maritime militia formations
+
+        - Larger clusters (30+) indicate planned, coordinated operations
+
+
+        #### 2. Multi-Layer Formations
+
+
+        **Indicators:**
+
+        - Coast Guard vessels positioned 20-50 NM apart in triangular/square
+        patterns
+
+        - Fishing vessel clusters operating between or near CCG vessels
+
+        - Positions that create a perimeter around a maritime feature or other
+        vessels
+
+
+        **Significance:**
+
+        - Suggests coordinated "overwatch" with CCG supervising militia
+        operations
+
+        - Enables rapid response to perceived incursions or opportunities
+
+
+        #### 3. Harassment Tactics
+
+
+        **Indicators:**
+
+        - Close approaches to foreign vessels (within 1000 yards)
+
+        - Crossing ahead of foreign vessel courses
+
+        - Encirclement patterns (multiple vessels surrounding a target)
+
+        - Abrupt course/speed changes near foreign vessels
+
+        - Use of water cannons or spotlights
+
+        - Dangerous maneuvering (bow-to-bow confrontations)
+
+
+        **Significance:**
+
+        - Direct attempts to intimidate or impede foreign vessel operations
+
+        - Often directed at fishing vessels first, then official vessels if
+        escalation occurs
+
+
+        #### 4. Graduated Response
+
+
+        **Indicators:**
+
+        - Initial approach by fishing vessels (maritime militia)
+
+        - Coast Guard vessel movement toward area after initial contact
+
+        - Communications between vessels before/during encounters
+
+        - Coordinated arrival of additional vessels during encounters
+
+
+        **Significance:**
+
+        - Demonstrates command and control between ostensibly civilian and
+        official vessels
+
+        - Allows for "escalation ladder" while maintaining plausible deniability
+
+
+        ### Historical Escalation Patterns
+
+
+        1. **Phase 1: Presence**
+           - Increased number of fishing vessels in disputed area
+           - Regular CCG patrols established
+           - Limited direct interaction with foreign vessels
+
+        2. **Phase 2: Assertion**
+           - Fishing vessels approach foreign vessels
+           - CCG vessels enter territorial waters for extended periods
+           - Public statements about sovereignty rights
+
+        3. **Phase 3: Confrontation**
+           - Direct harassment of foreign fishing vessels
+           - Attempts to impede foreign official vessels
+           - Multiple vessel coordinated operations
+           - Use of water cannons or dangerous maneuvering
+
+        4. **Phase 4: Dominance**
+           - Persistent presence that effectively controls access
+           - Foreign vessels routinely deterred or harassed
+           - Establishment of de facto control despite legal status
+
+        ---
+
+
+        ## Analysis Procedures
+
+
+        ### Daily Monitoring Protocol
+
+
+        #### 1. Area Definition and Vessel Location
+
+
+        Begin each analysis by establishing a baseline of vessel positions in
+        the following areas:
+
+
+        **Priority Areas:**
+
+        - Immediate vicinity of Senkaku/Diaoyu Islands (25.7-26.0°N,
+        123.5-124.0°E)
+
+        - Secondary perimeter (25.0-26.5°N, 123.0-125.0°E)
+
+        - Broader East China Sea region (24.0-27.0°N, 122.0-126.0°E)
+
+
+        **Query Template:**
+
+        ```javascript
+
+        {
+          "database": "lux",
+          "collection": "entity",
+          "pipeline": [
+            {
+              "$geoNear": {
+                "near": {
+                  "type": "Point", 
+                  "coordinates": [123.5, 25.7]
+                },
+                "distanceField": "distance",
+                "maxDistance": 100000,
+                "spherical": true,
+                "query": {"type": "Ship"}
+              }
+            },
+            {
+              "$project": {
+                "attributes.ShipName": 1,
+                "attributes.MMSI": 1,
+                "attributes.VesselType": 1,
+                "attributes.Flag": 1,
+                "location.coordinates": 1,
+                "distance": 1,
+                "timestamp": 1
+              }
+            },
+            {
+              "$sort": {"distance": 1}
+            }
+          ]
+        }
+
+        ```
+
+
+        #### 2. Chinese Coast Guard Identification
+
+
+        Identify all Chinese Coast Guard vessels in the region:
+
+
+        ```javascript
+
+        {
+          "database": "lux",
+          "collection": "entity",
+          "filter": {
+            "type": "Ship",
+            "geohash": {"$regex": "^w"},
+            "$or": [
+              {"attributes.ShipName": {"$regex": "COAST GUARD", "$options": "i"}},
+              {"attributes.ShipName": {"$regex": "HAI JING", "$options": "i"}},
+              {"attributes.MMSI": {"$regex": "^4138"}},
+              {"attributes.VesselType": "WPB", "attributes.Flag": "CHN"}
+            ]
+          },
+          "sort": {"timestamp": -1}
+        }
+
+        ```
+
+
+        #### 3. Maritime Militia Cluster Identification
+
+
+        Look for concentrations of Chinese fishing vessels that may represent
+        maritime militia:
+
+
+        ```javascript
+
+        {
+          "database": "lux",
+          "collection": "entity",
+          "pipeline": [
+            {
+              "$match": {
+                "type": "Ship", 
+                "attributes.Flag": "CHN", 
+                "attributes.VesselType": "FSH",
+                "geohash": {"$regex": "^w"}
+              }
+            },
+            {
+              "$group": {
+                "_id": {
+                  "lat_rounded": {"$trunc": [{"$arrayElemAt": ["$location.coordinates", 1]}, 1]},
+                  "lon_rounded": {"$trunc": [{"$arrayElemAt": ["$location.coordinates", 0]}, 1]}
+                },
+                "count": {"$sum": 1},
+                "vessels": {"$push": {
+                  "mmsi": "$attributes.MMSI",
+                  "name": "$attributes.ShipName",
+                  "coords": "$location.coordinates",
+                  "course": "$attributes.course",
+                  "speed": "$attributes.speed"
+                }}
+              }
+            },
+            {
+              "$match": {"count": {"$gte": 5}}
+            },
+            {
+              "$sort": {"count": -1}
+            }
+          ]
+        }
+
+        ```
+
+
+        #### 4. Japanese Vessel Identification
+
+
+        Monitor Japanese vessels that may be potential targets for harassment:
+
+
+        ```javascript
+
+        {
+          "database": "lux",
+          "collection": "entity",
+          "filter": {
+            "type": "Ship",
+            "attributes.Flag": "JPN",
+            "geohash": {"$regex": "^w"}
+          },
+          "sort": {"timestamp": -1}
+        }
+
+        ```
+
+
+
+
+        ### Vessel Movement Analysis
+
+
+        #### 1. Track History Retrieval
+
+
+        For vessels of interest, retrieve recent track history to analyze
+        movement patterns:
+
+
+        ```javascript
+
+        {
+          "database": "lux",
+          "collection": "entity_tracks",
+          "filter": {"entity_id": "MMSI-000"},  // Replace with actual lux_track_id
+          "sort": {"blockStartTime": -1},
+          "limit": 3
+        }
+
+        ```
+
+
+        #### 2. Course and Speed Assessment
+
+
+        Analyze current heading, speed, and pattern of movement for individual
+        vessels:
+
+
+        | Movement Type | Speed (kts) | Course | Pattern |
+
+        |---------------|-------------|--------|---------|
+
+        | Stationary/Anchored | 0-1 | Variable | No significant change in
+        position |
+
+        | Loitering | 1-5 | Circular or irregular | Position changes within
+        limited area |
+
+        | Transiting | 5-15+ | Consistent | Steady progress along a route |
+
+        | Maneuvering | Variable | Changing | Frequent alterations in speed and
+        heading |
+
+
+        #### 3. Course Intersection Projection
+
+
+        For vessels on potentially intercepting courses, calculate estimated
+        convergence:
+
+
+        1. Extract position, course and speed for vessels A and B
+
+        2. Convert speed from knots to km/h (multiply by 1.852)
+
+        3. Calculate velocity components:
+           - East-west component: speed × sin(course × π/180)
+           - North-south component: speed × cos(course × π/180)
+        4. Project future positions at intervals (e.g., 1, 2, 3 hours)
+
+        5. Calculate distance between projected positions
+
+        6. If distance decreases then increases, note the minimum distance and
+        time of closest approach
+
+
+        ### Formation and Pattern Recognition
+
+
+        #### 1. Coast Guard Triangular/Square Pattern
+
+
+        Chinese Coast Guard vessels often operate in geometric formations to
+        maximize coverage:
+
+
+        - Three CCG vessels forming a triangle (each 30-80 km apart)
+
+        - Four CCG vessels in rectangular formation
+
+        - Positioned to create a perimeter around an area
+
+
+        **Analysis Steps:**
+
+        1. Plot CCG vessel positions on a map
+
+        2. Connect the positions to identify geometric patterns
+
+        3. Measure distances between vessels
+
+        4. Assess if the formation covers a specific feature or vessel group
+
+
+        #### 2. Fishing Fleet Cluster Analysis
+
+
+        Identify abnormal clustering of fishing vessels that suggests maritime
+        militia:
+
+
+        **Normal Fishing Pattern:**
+
+        - Dispersed vessels following similar courses
+
+        - Spacing typically 1-5 km apart
+
+        - Speed 2-5 knots while actively fishing
+
+        - Course changes consistent with fishing activity
+
+
+        **Maritime Militia Pattern:**
+
+        - Concentrated clusters (15+ vessels within 5-10 km)
+
+        - Similar vessel naming patterns
+
+        - Minimal speed/stationary positioning not consistent with fishing
+
+        - Formation maintains integrity over time
+
+
+        #### 3. Encirclement/Harassment Patterns
+
+
+        Look for indicators of deliberate harassment operations:
+
+
+        **Indicators:**
+
+        - Multiple Chinese vessels surrounding a single foreign vessel
+
+        - Coordinated positioning (evenly spaced around target)
+
+        - Synchronized course/speed changes
+
+        - Vessels maintaining a specific distance from target
+
+        - Communication patterns (course/speed changes occurring within short
+        timespan)
+
+
+        ---
+
+
+        ## Vessel Identification Guide
+
+
+        ### Chinese Coast Guard Vessels
+
+
+        #### Identification Features:
+
+        - MMSI numbers often starting with "4138" 
+
+        - Names containing "CHINA COAST GUARD" or "ZHONG GUO HAI JING"
+
+        - Vessel type listed as "WPB" (Water Patrol Boat)
+
+        - ForceType typically "WT" or "RD"
+
+        - MilOrCiv usually coded as "CIV" or "COT" despite government function
+
+
+        #### Example Vessels:
+
+        - ZHONG GUO HAI JING 2308 (MMSI: 413378580)
+
+        - CHINACOASTGUARD1401 (MMSI: 413875010)
+
+        - CHINACOASTGUARD1306 (MMSI: 413875017)
+
+
+        ### Chinese Maritime Militia
+
+
+        #### Identification Features:
+
+        - MMSI numbers often beginning with "412" or "413"
+
+        - Names with provincial prefixes:
+          - "ZHE" (Zhejiang Province)
+          - "MIN" (Fujian Province)
+          - "LUDA" (Dalian)
+          - "HAINAN" (Hainan Province)
+        - Consistent naming patterns within groups (e.g., ZHELINGYU#####)
+
+        - Listed as "FSH" vessel type despite minimal fishing activity
+
+        - Newer construction/larger size than typical fishing vessels
+
+
+        #### Notable Maritime Militia Groupings:
+
+        - Zhejiang-based (ZHELINGYU, ZHEPUYU, ZHELONGGANGYU)
+
+        - Fujian-based (MINFUDINGYU, MINXIAYUYUN)
+
+        - Hainan-based (QIONGHAI)
+
+
+        ### Japanese Vessels of Interest
+
+
+        #### Commercial Fishing Vessels:
+
+        - MMSI numbers starting with "431"
+
+        - Names often ending with "MARU" or "MARU NO##"
+
+        - Example: HARUKOMARU NO15 (MMSI: 431021623)
+
+
+        #### Japanese Coast Guard:
+
+        - Vessel names containing "JCG" or "JAPAN COAST GUARD"
+
+        - Modern patrol vessels with higher speeds
+
+
+        #### Other Japanese Vessels:
+
+        - MMSI numbers beginning with "431" (Japan)
+
+        - Cargo ("CGO"), Tanker ("TKR"), and Bulk Carriers ("BLK")
+
+
+        ### Vessel Type Codes
+
+
+        | Code | Meaning |
+
+        |------|---------|
+
+        | TKR  | Tanker |
+
+        | CGO  | Cargo (general) |
+
+        | BLK  | Bulk Carrier |
+
+        | CON  | Container Ship |
+
+        | FSH  | Fishing Vessel |
+
+        | TUG  | Tug |
+
+        | WPB  | Water Patrol Boat |
+
+        | AGI  | Auxiliary General Intelligence |
+
+        | UNK  | Unknown |
+
+        | MIS  | Miscellaneous |
+
+
+        ---
+
+
+        ## Reporting Format and Style
+
+
+        ### Writing Style Guidelines
+
+
+        #### 1. Clarity and Precision
+
+
+        - Use precise geographic references (coordinates when possible)
+
+        - Specify exact vessel counts rather than "several" or "many"
+
+        - Use standard nautical terminology for movements and positions
+
+
+        #### 2. Objective Tone
+
+
+        - Present facts before interpretation
+
+        - Clearly distinguish between observed data and assessed intent
+
+        - Use qualifying language for assessments ("likely," "possibly,"
+        "indicates")
+
+
+        #### 3. Concise Structure
+
+
+        - Front-load key information
+
+        - Use bullet points for lists and sequences
+
+        - Include only relevant details that support assessment
+
+
+        #### 4. Standard Terminology
+
+
+        - Use consistent vessel descriptions
+
+        - Maintain standard formatting for MMSI numbers (in quotes)
+
+        - Use nautical miles (NM) for distance between vessels
+
+        - Use knots (kts) for speed
+
+        - Use degrees (°) for course
+
+
+        #### 5. Confidence Levels
+
+
+        CRITICAL: You must express all likelihoods using the following
+          Words of Estimative Probability (WEP).
+
+          - Do not use "weasel words" (e.g., might, could, possibly).
+
+          You must strictly adhere to the following linguistic scale for all probability estimates.
+          Do not use "maybe" or "perhaps"; use only the terms defined below:
+
+          01-05%: Almost no chance, Remote, Improbable
+          
+          05-20%: Very unlikely, Highly improbable
+          
+          20-45%: Roughly unlikely, Improbably
+          
+          45-55%: Roughly even chance, Even odds
+          
+          55-80%: Likely, Probable, (Probably)
+          
+          80-95%: Very likely, Highly probable
+          
+          95-99%: Almost certain, Nearly certain
+          
+          Whenever you make a prediction, append the percentage range in parentheses.
+
+        ---
+
+
+        ## Additional Resources
+
+
+        ### Area Coordinates Reference
+
+
+        #### Senkaku/Diaoyu Islands
+
+        - Uotsuri/Diaoyu: 25.7460°N, 123.4704°E
+
+        - Kuba/Huangwei: 25.9255°N, 123.6881°E
+
+        - Taisho/Chiwei: 25.5511°N, 124.5927°E
+
+
+        #### Key Reference Points
+
+        - Ishigaki (Japan): 24.4000°N, 124.2000°E
+
+        - Taiwan north coast: 25.3000°N, 121.5000°E
+
+        - Wenzhou (China): 28.0000°N, 120.7000°E
+
+
+        ### Geohash Prefixes for Area Monitoring
+
+
+        | Prefix | Area Coverage |
+
+        |--------|--------------|
+
+        | wx | Senkaku/Diaoyu Islands |
+
+        | wu | East China Sea (north of islands) |
+
+        | ws | East China Sea (south of islands) |
+
+        | ww | East of Taiwan |
+
+        | wm | East of mainland China |
+
+
+        ### Notable Historical Incidents
+
+
+        - **September 2010**: Chinese trawler rammed Japanese Coast Guard
+        vessels
+
+        - **September 2012**: Large-scale deployment following Japanese
+        nationalization
+
+        - **November 2015**: First confirmed armed Chinese Coast Guard vessel in
+        area
+
+        - **August 2016**: 200-300 Chinese fishing vessels and 15 Coast Guard
+        vessels
+
+        - **July 2020**: Chinese vessels maintain record presence of 111
+        consecutive days
+
+        - **February 2021**: China's Coast Guard Law authorizes use of weapons
+        against foreign vessels
+machine:
+  start:
+    workflow_config:
+      final_output_nodes: []
+      user_input:
+        alert:
+          type: ParagraphText
+      workflow:
+        - name: alert_json
+          type: jinja_json
+          inputs:
+            alert: alert
+          config:
+            output_template:
+              jinja_template_str: |-
+                {% if alert is string %}
+                  {{alert}}
+                {% else %}
+                  {{ alert | tojson() }}
+                {% endif %}
+        - name: truncate_input_message
+          type: jinja
+          inputs:
+            alert: alert_json
+          config:
+            output_template:
+              jinja_template_str: |-
+                {% if alert.geometries is defined %}
+                  {% set _ = alert.pop("geometries") %}
+                {% endif %} {{alert | tojson()}}
+        - name: format_user_message
+          type: jinja
+          config:
+            output_template:
+              jinja_template_str: >-
+                ## Your Instructions
+
+
+                Agent Protocol: Database Exploration & Analysis
+
+                Tool failure handling: If any tool call errors, times out,
+                returns no data, or the MCP connection fails, do not retry.
+                Continue with other tools or proceed with partial analysis and
+                clearly note any data gaps. Tool usage override: If the alert
+                payload includes `events` with `attributes` and `geometries`,
+                use the alert payload as the primary data source. You may only
+                run targeted lookups in `entity` and `entity_tracks` using
+                `entity_id` or `lux_track_id` from the alert. Do not query the
+                `alerts` collection or run proximity/nearby-ship searches.
+
+
+                PHASE 1: Technical Schema & Index Discovery Exception: If the
+                tool usage override applies, skip list-collections. Only run
+                collection-indexes for `entity` and `entity_tracks`, then
+                perform targeted lookups using IDs from the alert.
+
+
+                You must execute this phase before performing any analysis or
+
+                filtering.
+
+                You are only allowed to make ONE tool call at a time. Tool
+                budget: Make at most 10 tool calls total. Prioritize `entity`
+                and `entity_tracks`. If the budget is exhausted, stop calling
+                tools and produce the report with explicit data gaps.
+
+
+                0. Retrieve collections: Call the list-collections tool to
+                identify available collections (skip if tool usage override
+                applies).
+
+                1. Retrieve Indexes: Call the collection-indexes tool only for
+                collections you will query. If tool usage override applies, only
+                query `entity` and `entity_tracks`. Do not enumerate all
+                collections. Do not query `alerts`.
+
+
+                2. =Retrieve Schema: Call findOne on any collection you intend
+                to
+
+                use. Map the exact keys and nesting of the document.
+
+                3. Validation: You are strictly forbidden from filtering on any
+
+                attribute that was not explicitly seen in the findOne sample or
+
+                listed as an index.
+
+
+                PHASE 2: Strict Query Constraints
+
+                You are only allowed to filter based of indexes of a given
+                collection
+
+                never perform a find or aggregrate query on a collection that
+                you have not called collection-indexes on.
+
+                To prevent prohibitively expensive full-database scans
+
+                (COLLSCAN) and errors, adhere to these rules:
+
+
+                * Index Requirement: Every query filter MUST include only fields
+                identified in the collection-indexes tool.
+
+                Any filter using non-index fields will result in an error.
+
+
+                * Entity Linking: When querying entity_tracks, you must filter
+
+                by the entity_id field. Use the _id from the entity collection
+
+                to find the matching entity_id.
+
+
+                * Forbidden Fields: Never use MMSI or attributes.MMSI for
+
+                filtering or querying.
+
+
+                * Search Limitation: Only use fields listed in the KEY FIELDS
+
+                section of the system prompt.
+
+
+                * Geospatial search: NEVER perform searches using geospatial
+                coordinates
+
+                * Computational Efficiency: Only make small, targeted query
+
+                requests. If a query does not use an index, it is too expensive
+
+                and is forbidden.
+
+
+
+                Words of Probability Calibration emphasis
+
+                You are only ever allowed to use the following words when
+                referring to probability.
+
+                CRITICAL: You must express all likelihoods using the following
+
+                Words of Estimative Probability (WEP).
+
+
+                You must strictly adhere to the following linguistic scale for
+                all probability estimates.
+
+                Do not use "maybe" or "perhaps"; use only the terms defined
+                below:
+
+
+                01-05%: Almost no chance, Remote, Improbable
+
+
+                05-20%: Very unlikely, Highly improbable
+
+
+                20-45%: Roughly unlikely, Improbably
+
+
+                45-55%: Roughly even chance, Even odds
+
+
+                55-80%: Likely, Probable, (Probably)
+
+
+                80-95%: Very likely, Highly probable
+
+
+                95-99%: Almost certain, Nearly certain
+
+
+                Whenever you make a prediction, append the percentage range in
+                parentheses.
+
+
+                Required Output Format:Judgment: [Clear, unambiguous statement
+
+                of event]
+
+
+                Likelihood: [WEP Term] (~[X]%)
+
+
+                Output Requirements
+
+                Output Length Constraints - Keep the full report under 600 words
+                - Use at most 4 bullets per section - For each vessel, use at
+                most 3 bullets - Recommendations: at most 3 bullets total -
+                Include exactly one map code block in the entire response - If
+                you are close to the limit, drop lower-priority details
+                (examples, rationale, extended history) but always complete all
+                required sections and end with the final line below - End the
+                report with the line: End of report.
+
+
+                1. Preliminary Thoughts
+
+
+                Before every tool call, you must include a "Technical
+
+                Justification" in your thoughts:
+
+
+                * State which index you are using.
+
+
+                * Confirm the attributes exist based on your findOne discovery.
+
+
+                * It is absolutely critical that the tool calls last no longer
+
+                than 80 seconds,
+                  so only use focused queries exclusively using the indexes available for a given collections
+
+                2. Output Requirements Analysis Report - Title report to be
+                clear and informative of what is contained in the report - You
+                are NEVER allowed to use anything other than the Words of
+                Estimative Probability when reffering to likelihood - Begin
+                report with a "Situation Overview" section in which a brief
+                summary of the report is made. - In the section after the
+                "Situation Overview", generate the Force Laydown Map as
+                described below - Make ONE and only ONE map in the report. -
+                After the "Situation Overview" section create an "Intelligence
+                Summary" section which contains the detailed report - Begin each
+                section with a clear header - Use bullet points for lists and
+                make sure none of the bullets are italicized - Include exact
+                timestamps in HH:MM:SS format  - Cite specific data sources for
+                each finding - Do not generate final report until all
+                intermediate thoughts and tool calls are completed - Output
+                entity name, variables, and data sources as following:
+                `variable`, do not use *variable* - Do not use italics (e.g.
+                *sample text* in mardown output at all) * Content: Develop both
+                MLCOA (Most Likely Course of Action) and
+
+                MDCOA (Most Dangerous Course of Action).
+                  both MLCOA and MDCOA must include confidence level expressed in terms of words of estimated probability
+
+                * Content: End the report with a recommendations section
+
+                containing the recommended actions responding to the actions
+
+                outlined in the MLCOA and MDCOA
+
+
+                3. Force Laydown (Map)
+                  - At the end of all your tool calls, generate a map that plots all of the entities in the simulation at the start of the simulation.
+                  - if there are tracks in the database for the vessels that are displayed, display them on the map as is shown below.
+                  - for the vessels of interest show on the map the predicted path it will take in the future. Make sure that this projected path is valid and does not go over any land masses. The realism of the projection is the most important aspect.
+                  - Generate exactly one map block total. If a map has already been produced in the response, do not produce another.
+                  - Keep the map minimal: include only vessel points and at most one track per vessel; cap each LineString to 8 coordinate pairs; omit predicted paths if they exceed 8 points.
+                  - Do NOT generate any text in between the last tool call and the map. Do NOT say anything like "Based on all the data I've gathered, I can now generate a map of the vessels at the start of the simulation:"
+                  - Retrieve the location for each entity at the start of the simulation
+                  - The expected output should be shaped as a custom markdown code block with the language specified as "map" and formatted in this way:
+                  - For each map, generate a random ID that does not conflict.
+                  - Output must be a markdown fenced code block
+                  - Use EXACTLY three backticks followed by the word "map" on the opening line: ```map
+                  - The JSON must be properly formatted with newlines and indentation
+                  - Close with three backticks on their own line: ```
+                  - Do NOT put "map" and the JSON on the same line
+                  - For any commercial vehicles that are neither red nor blue team use the green sidc 10043000001400000000
+                  - For any vehicles that have potentially misleading information or are debatably red team use the yellow sidc 10013000000000000000
+                  - Do not classify a vessel as military unless you are completely sure of the classification
+                  - If a vessel is classified as a merchant vessel only every use the green or yellow sidc icons for it.
+                  - Be sure to make the red team confirmed military forces use the sidc 10053000001100000000
+                  - Be sure to make the blue team confirmed military forces use the sidc 10033000001100000000
+                  - Do NOT label any location. Only label vessels.
+                  
+                  
+                ```map
+
+
+                {
+                  "id": "map-custom-shapes",
+                  "geojsonData": {
+                    "type": "FeatureCollection",
+                    "features": [
+                      {
+                        "type": "Feature",
+                        "geometry": { 
+                          "type": "LineString", 
+                          "coordinates": [
+                              [5.747001, 50.046003],
+                              [5.747002, 50.046005],
+                              [5.747003, 50.046007],
+                              [5.747004, 50.04601]
+                            ]
+                        },
+                        'properties': {
+                          "name": "502nd PIR"
+                        }
+                      },
+                      {
+                        "type": "Feature",
+                        "geometry": { "type": "Point", "coordinates": [5.747, 50.046] },
+                        "properties": {
+                          "name": "502nd PIR",
+                          "description": "Echelon: Regiment (III) - Parachute Infantry",
+                          "sidc": "SFGPUCIA--G----"
+                        }
+                      },
+                      {
+                        "type": "Feature",
+                        "geometry": { "type": "Point", "coordinates": [5.808, 50.013] },
+                        "properties": {
+                          "name": "Team Cherry (TF)",
+                          "description": "Echelon: Battalion Task Force (II) - 10th Armored",
+                          "sidc": "10031000001205000000"
+                        }
+                      }
+                    ]
+                  }
+                }
+
+
+                ```
+
+                ## Triggering alert
+
+
+
+                {{alert}}
+          inputs:
+            alert: truncate_input_message
+        - name: add_user_message
+          type: insert_messages
+          config:
+            index: -1
+          inputs:
+            messages: messages
+            new_messages:
+              - role: '!user'
+                content: format_user_message
+    write_to_state:
+      messages: add_user_message
+    next_node:
+      default: ChatAgent
+  ChatAgent:
+    workflow_config:
+      final_output_nodes:
+        - node: Agent
+          channel_name: Agent
+          channel_type: messages
+          cast_mode:
+            mode: auto
+      workflow:
+        - name: approximate_token_count
+          type: approximate_token_count
+          config: {}
+          inputs:
+            messages: messages
+        - name: Agent
+          type: chat_generation_with_tools
+          config:
+            max_tokens: 12000
+            temperature: 0
+          inputs:
+            model: '!anthropic/claude-sonnet-4-5'
+            messages: messages
+            tools:
+              - type: '!function'
+                function:
+                  name: '!sympy_calculator'
+                  description: '!Evaluate an expression with sympy'
+                  parameters:
+                    type: '!object'
+                    properties:
+                      expr:
+                        type: '!string'
+                        description: '!The expression to evaluate, e.g., 21**2'
+              - type: '!function'
+                function:
+                  name: '!code_execution_test_sub_application'
+                  description: >-
+                    !Compute the Great Circle distance in km between two pairs
+                    of coordinates in degrees.
+                  parameters:
+                    type: '!object'
+                    properties:
+                      lat1:
+                        type: '!number'
+                        description: '!The latitude of the first point in degrees North'
+                      lon1:
+                        type: '!number'
+                        description: '!The longitude of the first point in degrees East'
+                      lat2:
+                        type: '!number'
+                        description: '!The latitude of the second point in degrees North'
+                      lon2:
+                        type: '!number'
+                        description: '!The longitude of the second point in degrees East'
+              - type: '!function'
+                function:
+                  name: '!list-collections'
+                  description: '!List all collections for a given database'
+                  parameters:
+                    type: '!object'
+                    properties:
+                      database:
+                        type: '!string'
+                        description: '!Database name'
+              - type: '!function'
+                function:
+                  name: '!list-databases'
+                  description: '!List all databases for a MongoDB connection'
+                  parameters:
+                    type: '!object'
+                    properties: {}
+                    additionalProperties: false
+                  strict: true
+              - type: '!function'
+                function:
+                  name: '!find'
+                  description: '!Run a find query against a MongoDB collection'
+                  parameters:
+                    type: '!object'
+                    properties:
+                      database:
+                        type: '!string'
+                        description: '!Database name'
+                      collection:
+                        type: '!string'
+                        description: '!Collection name'
+                      filter:
+                        type: '!object'
+                        additionalProperties: true
+                        description: >-
+                          !The query filter, matching the syntax of the query
+                          argument of db.collection.find()
+                      projection:
+                        type: '!object'
+                        additionalProperties: true
+                        description: >-
+                          !The projection, matching the syntax of the projection
+                          argument of db.collection.find()
+                      limit:
+                        type: '!number'
+                        description: '!The maximum number of documents to return'
+                      sort:
+                        type: '!object'
+                        additionalProperties: true
+                        description: >-
+                          !A document, describing the sort order, matching the
+                          syntax of the sort argument of cursor.sort(). The keys
+                          of the object are the fields to sort on, while the
+                          values are the sort directions (1 for ascending, -1
+                          for descending).
+                      responseBytesLimit:
+                        type: '!number'
+                        description: >-
+                          !The maximum number of bytes to return in the
+                          response. This value is capped by the server's
+                          configured maxBytesPerQuery and cannot be exceeded.
+                          Note to LLM: If the entire query result is required,
+                          use the "export" tool instead of increasing this
+                          limit.
+                    required:
+                      - '!database'
+                      - '!collection'
+              - type: '!function'
+                function:
+                  name: '!collection-indexes'
+                  description: '!Describe the indexes for a collection'
+                  input_schema:
+                    type: '!object'
+                    properties:
+                      database:
+                        type: '!string'
+                        description: '!Database name'
+                      collection:
+                        type: '!string'
+                        description: '!Collection name'
+                    required:
+                      - '!database'
+                      - '!collection'
+                    additionalProperties: false
+              - type: '!function'
+                function:
+                  name: '!collection-schema'
+                  description: '!Describe the schema for a collection'
+                  input_schema:
+                    type: '!object'
+                    properties:
+                      database:
+                        type: '!string'
+                        description: '!Database name'
+                      collection:
+                        type: '!string'
+                        description: '!Collection name'
+                      sampleSize:
+                        type: '!number'
+                        description: '!Number of documents to sample for schema inference'
+                      responseBytesLimit:
+                        type: '!number'
+                        description: >-
+                          !The maximum number of bytes to return in the
+                          response. This value is capped by the server's
+                          configured maxBytesPerQuery and cannot be exceeded.
+                    required:
+                      - '!database'
+                      - '!collection'
+                    additionalProperties: false
+              - type: '!function'
+                function:
+                  name: '!collection-storage-size'
+                  description: '!Gets the size of the collection'
+                  input_schema:
+                    type: '!object'
+                    properties:
+                      database:
+                        type: '!string'
+                        description: '!Database name'
+                      collection:
+                        type: '!string'
+                        description: '!Collection name'
+                    required:
+                      - '!database'
+                      - '!collection'
+                    additionalProperties: false
+              - type: '!function'
+                function:
+                  name: '!count'
+                  description: >-
+                    !Gets the number of documents in a MongoDB collection using
+                    db.collection.count() and query as an optional filter
+                    parameter
+                  input_schema:
+                    type: '!object'
+                    properties:
+                      database:
+                        type: '!string'
+                        description: '!Database name'
+                      collection:
+                        type: '!string'
+                        description: '!Collection name'
+                      query:
+                        type: '!object'
+                        additionalProperties: true
+                        description: >-
+                          !A filter/query parameter. Allows users to filter the
+                          documents to count. Matches the syntax of the filter
+                          argument of db.collection.count().
+                    required:
+                      - '!database'
+                      - '!collection'
+                    additionalProperties: false
+              - type: '!function'
+                function:
+                  name: '!db-stats'
+                  description: >-
+                    !Returns statistics that reflect the use state of a single
+                    database
+                  input_schema:
+                    type: '!object'
+                    properties:
+                      database:
+                        type: '!string'
+                        description: '!Database name'
+                    required:
+                      - '!database'
+                    additionalProperties: false
+              - type: '!function'
+                function:
+                  name: '!aggregate'
+                  description: >-
+                    !Run an aggregation against a MongoDB collection.
+                    $vectorSearch **MUST** be the first stage of the pipeline,
+                    or the first stage of a $unionWith subpipeline.
+
+                    ### Usage Rules for `$vectorSearch`
+
+                    - **Unset embeddings:**
+                      Unless the user explicitly requests the embeddings, add an `$unset` stage **at the end of the pipeline** to remove the embedding field and avoid context limits. **The $unset stage in this situation is mandatory**.
+                    - **Pre-filtering:**
+
+                    If the user requests additional filtering, include filters
+                    in `$vectorSearch.filter` only for pre-filter fields in the
+                    vector index.
+                        NEVER include fields in $vectorSearch.filter that are not part of the vector index.
+                    - **Post-filtering:**
+                        For all remaining filters, add a $match stage after $vectorSearch.
+                    ### Note to LLM
+
+                    - If unsure which fields are filterable, use the
+                    collection-indexes tool to determine valid prefilter fields.
+
+                    - If no requested filters are valid prefilters, omit the
+                    filter key from $vectorSearch.
+                  input_schema:
+                    type: '!object'
+                    properties:
+                      database:
+                        type: '!string'
+                        description: '!Database name'
+                      collection:
+                        type: '!string'
+                        description: '!Collection name'
+                      pipeline:
+                        type: '!array'
+                        items:
+                          anyOf:
+                            - type: '!object'
+                              additionalProperties: true
+                            - type: '!object'
+                              properties:
+                                $vectorSearch:
+                                  type: '!object'
+                                  properties:
+                                    exact:
+                                      type: '!boolean'
+                                      description: >-
+                                        !When true, uses an ENN algorithm,
+                                        otherwise uses ANN. Using ENN is not
+                                        compatible with numCandidates, in that
+                                        case, numCandidates must be left empty.
+                                    index:
+                                      type: '!string'
+                                      description: >-
+                                        !Name of the index, as retrieved from
+                                        the 'collection-indexes' tool.
+                                    path:
+                                      type: '!string'
+                                      description: >-
+                                        !Field, in dot notation, where to
+                                        search. There must be a vector search
+                                        index for that field. Note to LLM: When
+                                        unsure, use the 'collection-indexes'
+                                        tool to validate that the field is
+                                        indexed with a vector search index.
+                                    queryVector:
+                                      anyOf:
+                                        - type: '!string'
+                                        - type: '!array'
+                                          items:
+                                            type: '!number'
+                                      description: >-
+                                        !The content to search for. The
+                                        embeddingParameters field is mandatory
+                                        if the queryVector is a string, in that
+                                        case, the tool generates the embedding
+                                        automatically using the provided
+                                        configuration.
+                                    numCandidates:
+                                      type: '!integer'
+                                      exclusiveMinimum: 0
+                                      description: >-
+                                        !Number of candidates for the ANN
+                                        algorithm. Mandatory when exact is
+                                        false.
+                                    limit:
+                                      type: '!integer'
+                                      exclusiveMinimum: 0
+                                    filter:
+                                      type: '!object'
+                                      additionalProperties: true
+                                      description: >-
+                                        !MQL filter that can only use filter
+                                        fields from the index definition. Note
+                                        to LLM: If unsure, use the
+                                        'collection-indexes' tool to learn which
+                                        fields can be used for filtering.
+                                    embeddingParameters:
+                                      type: '!object'
+                                      properties:
+                                        outputDimension:
+                                          type: '!number'
+                                          enum:
+                                            - '!256'
+                                            - '!512'
+                                            - '!1024'
+                                            - '!2048'
+                                            - '!4096'
+                                        outputDtype:
+                                          type: '!string'
+                                          enum:
+                                            - '!float'
+                                            - '!int8'
+                                            - '!uint8'
+                                            - '!binary'
+                                            - '!ubinary'
+                                        model:
+                                          type: '!string'
+                                          enum:
+                                            - '!voyage-3-large'
+                                            - '!voyage-3.5'
+                                            - '!voyage-3.5-lite'
+                                            - '!voyage-code-3'
+                                      additionalProperties: false
+                                      description: >-
+                                        !The embedding model and its parameters
+                                        to use to generate embeddings before
+                                        searching. It is mandatory if
+                                        queryVector is a string value. Note to
+                                        LLM: If unsure, ask the user before
+                                        providing one.
+                                  required:
+                                    - '!index'
+                                    - '!path'
+                                    - '!queryVector'
+                                  additionalProperties: true
+                              required:
+                                - '!$vectorSearch'
+                              additionalProperties: false
+                        description: '!An array of aggregation stages to execute.'
+                      responseBytesLimit:
+                        type: '!number'
+                        description: >-
+                          !The maximum number of bytes to return in the
+                          response. This value is capped by the server's
+                          configured maxBytesPerQuery and cannot be exceeded.
+                          Note to LLM: If the entire aggregation result is
+                          required, use the 'export' tool instead of increasing
+                          this limit.
+                    required:
+                      - '!database'
+                      - '!collection'
+                      - '!pipeline'
+                    additionalProperties: false
+              - type: '!function'
+                function:
+                  name: '!explain'
+                  description: >-
+                    !Returns statistics describing the execution of the winning
+                    plan chosen by the query optimizer for the evaluated method
+                  input_schema:
+                    type: '!object'
+                    properties:
+                      database:
+                        type: '!string'
+                        description: '!Database name'
+                      collection:
+                        type: '!string'
+                        description: '!Collection name'
+                      method:
+                        type: '!array'
+                        items:
+                          anyOf:
+                            - type: '!object'
+                              properties:
+                                name:
+                                  type: '!string'
+                                  const: '!aggregate'
+                                arguments:
+                                  type: '!object'
+                                  properties:
+                                    pipeline:
+                                      type: '!array'
+                                      items:
+                                        anyOf:
+                                          - type: '!object'
+                                            additionalProperties: true
+                                          - type: '!object'
+                                            properties:
+                                              $vectorSearch:
+                                                type: '!object'
+                                                properties:
+                                                  exact:
+                                                    type: '!boolean'
+                                                    description: >-
+                                                      !When true, uses an ENN algorithm,
+                                                      otherwise uses ANN. Using ENN is not
+                                                      compatible with numCandidates, in that
+                                                      case, numCandidates must be left empty.
+                                                  index:
+                                                    type: '!string'
+                                                    description: >-
+                                                      !Name of the index, as retrieved from
+                                                      the 'collection-indexes' tool.
+                                                  path:
+                                                    type: '!string'
+                                                    description: >-
+                                                      !Field, in dot notation, where to
+                                                      search. There must be a vector search
+                                                      index for that field. Note to LLM: When
+                                                      unsure, use the 'collection-indexes'
+                                                      tool to validate that the field is
+                                                      indexed with a vector search index.
+                                                  queryVector:
+                                                    anyOf:
+                                                      - type: '!string'
+                                                      - type: '!array'
+                                                        items:
+                                                          type: '!number'
+                                                    description: >-
+                                                      !The content to search for. The
+                                                      embeddingParameters field is mandatory
+                                                      if the queryVector is a string, in that
+                                                      case, the tool generates the embedding
+                                                      automatically using the provided
+                                                      configuration.
+                                                  numCandidates:
+                                                    type: '!integer'
+                                                    exclusiveMinimum: 0
+                                                    description: >-
+                                                      !Number of candidates for the ANN
+                                                      algorithm. Mandatory when exact is
+                                                      false.
+                                                  limit:
+                                                    type: '!integer'
+                                                    exclusiveMinimum: 0
+                                                  filter:
+                                                    type: '!object'
+                                                    additionalProperties: true
+                                                    description: >-
+                                                      !MQL filter that can only use filter
+                                                      fields from the index definition. Note
+                                                      to LLM: If unsure, use the
+                                                      'collection-indexes' tool to learn which
+                                                      fields can be used for filtering.
+                                                  embeddingParameters:
+                                                    type: '!object'
+                                                    properties:
+                                                      outputDimension:
+                                                        type: '!number'
+                                                        enum:
+                                                          - '!256'
+                                                          - '!512'
+                                                          - '!1024'
+                                                          - '!2048'
+                                                          - '!4096'
+                                                      outputDtype:
+                                                        type: '!string'
+                                                        enum:
+                                                          - '!float'
+                                                          - '!int8'
+                                                          - '!uint8'
+                                                          - '!binary'
+                                                          - '!ubinary'
+                                                      model:
+                                                        type: '!string'
+                                                        enum:
+                                                          - '!voyage-3-large'
+                                                          - '!voyage-3.5'
+                                                          - '!voyage-3.5-lite'
+                                                          - '!voyage-code-3'
+                                                    additionalProperties: false
+                                                    description: >-
+                                                      !The embedding model and its parameters
+                                                      to use to generate embeddings before
+                                                      searching. It is mandatory if
+                                                      queryVector is a string value. Note to
+                                                      LLM: If unsure, ask the user before
+                                                      providing one.
+                                                required:
+                                                  - '!index'
+                                                  - '!path'
+                                                  - '!queryVector'
+                                                additionalProperties: true
+                                            required:
+                                              - '!$vectorSearch'
+                                            additionalProperties: false
+                                      description: >-
+                                        !An array of aggregation stages to
+                                        execute.
+                                  required:
+                                    - '!pipeline'
+                                  additionalProperties: false
+                              required:
+                                - '!name'
+                                - '!arguments'
+                              additionalProperties: false
+                            - type: '!object'
+                              properties:
+                                name:
+                                  type: '!string'
+                                  const: '!find'
+                                arguments:
+                                  type: '!object'
+                                  properties:
+                                    filter:
+                                      type: '!object'
+                                      additionalProperties: true
+                                      description: >-
+                                        !The query filter, matching the syntax
+                                        of the query argument of
+                                        db.collection.find()
+                                    projection:
+                                      type: '!object'
+                                      additionalProperties: true
+                                      description: >-
+                                        !The projection, matching the syntax of
+                                        the projection argument of
+                                        db.collection.find()
+                                    limit:
+                                      type: '!number'
+                                      description: >-
+                                        !The maximum number of documents to
+                                        return
+                                    sort:
+                                      type: '!object'
+                                      additionalProperties: {}
+                                      description: >-
+                                        !A document, describing the sort order,
+                                        matching the syntax of the sort argument
+                                        of cursor.sort(). The keys of the object
+                                        are the fields to sort on, while the
+                                        values are the sort directions (1 for
+                                        ascending, -1 for descending).
+                                    responseBytesLimit:
+                                      type: '!number'
+                                      description: >-
+                                        !The maximum number of bytes to return
+                                        in the response. This value is capped by
+                                        the server's configured maxBytesPerQuery
+                                        and cannot be exceeded. Note to LLM: If
+                                        the entire query result is required, use
+                                        the 'export' tool instead of increasing
+                                        this limit.
+                                  additionalProperties: false
+                              required:
+                                - '!name'
+                                - '!arguments'
+                              additionalProperties: false
+                            - type: '!object'
+                              properties:
+                                name:
+                                  type: '!string'
+                                  const: '!count'
+                                arguments:
+                                  type: '!object'
+                                  properties:
+                                    query:
+                                      type: '!object'
+                                      additionalProperties: true
+                                      description: >-
+                                        !A filter/query parameter. Allows users
+                                        to filter the documents to count.
+                                        Matches the syntax of the filter
+                                        argument of db.collection.count().
+                                  additionalProperties: false
+                              required:
+                                - '!name'
+                                - '!arguments'
+                              additionalProperties: false
+                        description: '!The method and its arguments to run'
+                      verbosity:
+                        type: '!string'
+                        enum:
+                          - '!queryPlanner'
+                          - '!queryPlannerExtended'
+                          - '!executionStats'
+                          - '!allPlansExecution'
+                        description: >-
+                          !The verbosity of the explain plan, defaults to
+                          queryPlanner. If the user wants to know how fast is a
+                          query in execution time, use executionStats. It
+                          supports all verbosities as defined in the MongoDB
+                          Driver.
+                    required:
+                      - '!database'
+                      - '!collection'
+                      - '!method'
+                    additionalProperties: false
+              - type: '!function'
+                function:
+                  name: '!mongodb-logs'
+                  description: '!Returns the most recent logged mongod events'
+                  input_schema:
+                    type: '!object'
+                    properties:
+                      type:
+                        type: '!string'
+                        enum:
+                          - '!global'
+                          - '!startupWarnings'
+                        description: >-
+                          !The type of logs to return. Global returns all recent
+                          log entries, while startupWarnings returns only
+                          warnings and errors from when the process started.
+                      limit:
+                        type: '!integer'
+                        maximum: 1024
+                        minimum: 1
+                        description: '!The maximum number of log entries to return.'
+                    additionalProperties: false
+        - name: extend_chat_history_with_tool_use
+          type: extend_chat_history_with_tool_use
+          inputs:
+            chat_history: messages
+            llm_response: Agent
+            tool_responses: []
+        - name: extract_tool_calls
+          type: data_transform
+          config:
+            action: get_pydantic_attribute
+            additional_inputs:
+              attribute: tool_calls
+          inputs:
+            response: Agent
+        - name: extract_report_tool
+          type: jinja_json
+          config:
+            output_template:
+              jinja_template_str: |-
+                {% set ns = namespace(output=0) %}
+                {% for tool_call in Agent.tool_calls.values()%}
+                  {% if tool_call.name == "report_generation" %}
+                    {% set ns.output=tool_call.arguments %}
+                  {% endif %}
+                {% endfor %}
+                {{ns.output}}
+          inputs:
+            Agent: Agent
+        - name: extract_report_tool_call_id
+          type: jinja
+          config:
+            output_template:
+              jinja_template_str: |-
+                {% set ns = namespace(output=0) %}
+                {% for tool_id, tool_call in Agent.tool_calls.items() %}
+                  {% if tool_call.name == "report_generation" %}
+                    {% set ns.output=tool_call.id %}
+                  {% endif %}
+                {% endfor %}
+                {{ns.output}}
+          inputs:
+            Agent: Agent
+    write_to_state:
+      messages: extend_chat_history_with_tool_use
+    next_node:
+      cases:
+        - value: PlanningAgent
+          condition:
+            condition_input_var: extract_tool_calls
+            operator: bool
+      default: __end__
+  PlanningAgent:
+    workflow_config:
+      final_output_nodes:
+        - node: Agent
+          channel_name: Agent
+          channel_type: messages
+          cast_mode:
+            mode: auto
+      workflow:
+        - name: Agent
+          type: tool_generation
+          config:
+            tool_timeout: 120
+            max_turns: 1
+            model: '!anthropic/claude-sonnet-4-5'
+            max_tokens: 12000
+            temperature: 0
+            tools:
+              - name: experimental.sympy_calculator
+              - name: nodes.SubApplicationTool
+                init_kwargs:
+                  filter_tool_response_channels: false
+                  timeout: 60
+                  max_retries: 1
+                  backoff_factor: 1
+                  application_variant_id: 6747c9a5-d515-49cc-90b2-897c954c976a
+                  application_description: >-
+                    Compute the Great Circle distance in km between two pairs of
+                    coordinates in degrees.
+            mcp_servers:
+              - type: streamable_http
+                url: https://mcpx.staging.scalegov.com/@aw/mongodb-mcp/mcp
+                timeout: '60'
+                sse_read_timeout: '60'
+                auth:
+                  type: sgp_client
+          inputs:
+            messages: messages
+        - name: truncated_messages
+          type: jinja_json
+          inputs:
+            messages: Agent
+          config:
+            output_template:
+              jinja_template_str: >-
+                {% set out = [] %}
+
+                {% for message in messages %}
+
+                {% set message_out = message.model_dump() %}
+
+                {% if message.content | length > 10_000 %}
+
+                {% set truncated_content = message.content[:10_000] + "\n\nTHIS
+                TOOL RESPONSE WAS TOO LONG AND WAS TRUNCATED! PLEASE TRY TO USE
+                YOUR TOOLS IN SUCH A WAY AS TO AVOID VERY LONG RESPONSES.
+                CONSIDER TRYING AGAIN WITH A NARROWER SCOPE AND/OR SAFEGUARD
+                LIMITS IN PLACE." %}
+
+                {% set _ = message_out.update({"content": truncated_content}) %}
+
+                {% endif %}
+
+                {% set _ = out.append(message_out) %}
+
+                {% endfor %}
+
+                {{ out | tojson() }}
+        - name: append_tool_response
+          type: insert_messages
+          config:
+            index: -1
+          inputs:
+            messages: messages
+            new_messages: truncated_messages
+        - name: decrement_loop_counter
+          type: data_transform
+          config:
+            action: int_adder
+            additional_inputs:
+              'y': -1
+          inputs:
+            response: max_loops
+    write_to_state:
+      messages: append_tool_response
+      max_loops: decrement_loop_counter
+    next_node:
+      default: ChatAgent
+  OutputReport:
+    workflow_config:
+      final_output_nodes:
+        - node: return_tool
+          channel_name: Agent
+          channel_type: messages
+          cast_mode:
+            mode: auto
+        - node: Agent
+          channel_name: Agent
+          channel_type: messages
+          cast_mode:
+            mode: auto
+      workflow:
+        - name: extract_report
+          type: jinja
+          config:
+            output_template:
+              jinja_template_str: '{{response.report}}'
+          inputs:
+            response: report
+        - name: Agent
+          type: data_transform
+          config:
+            action: identity
+          inputs:
+            response:
+              - role: '!assistant'
+                content: extract_report
+        - name: return_tool
+          type: data_transform
+          config:
+            action: identity
+          inputs:
+            response:
+              - role: '!tool'
+                tool_call_id: report_tool_call_id
+                content: '!Report Generated'
+        - name: append_tool_message
+          type: insert_messages
+          config:
+            index: -1
+          inputs:
+            messages: messages
+            new_messages: return_tool
+        - name: append_assistant_message
+          type: insert_messages
+          config:
+            index: -1
+          inputs:
+            messages: append_tool_message
+            new_messages: Agent
+    write_to_state:
+      messages: append_assistant_message
+    next_node:
+      default: __end__
+id: 6ba3cb77-5bbb-4ac3-9ce3-2e19f1b0ac22
+
