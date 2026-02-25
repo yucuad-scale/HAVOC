@@ -19,7 +19,7 @@ initial_state:
 
         ### STEP 1: INTERNAL DISCOVERY (Scale Lux / MongoDB)
 
-        - Query the Scale Lux database first using the schema discovery protocol below.
+        - Query the lux database first using the schema discovery protocol below.
         - Do not guess at field names. Use `collection-indexes` and `findOne` to confirm schema before filtering.
         - Prioritize `entity` and `entity_tracks`. Only query other collections if directly relevant.
         - Output: vessel positions, movements, classifications, and track data found.
@@ -38,15 +38,6 @@ initial_state:
         - Never perform geospatial coordinate searches.
         - One tool call at a time. Tool budget: 10 calls maximum.
         - If budget is exhausted, stop calling tools and note data gaps explicitly.
-
-        ### STEP 2: GAP ANALYSIS
-
-        Compare what the Scale Lux database returned against the full scope of the analyst's request.
-
-        - **Scenario A (Complete Data):** Database fully answers the request — proceed to reporting.
-        - **Scenario B (Partial/Missing Data):** Identify specifically what is missing and note it explicitly in the report. Do not attempt to fill gaps with external sources.
-
-        ### STEP 3: SYNTHESIS & REPORTING
 
         Synthesize all data retrieved from Scale Lux into a final report using the format below.
 
