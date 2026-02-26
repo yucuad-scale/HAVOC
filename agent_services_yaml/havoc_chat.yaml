@@ -1,0 +1,461 @@
+use_case: query_agent_chat
+description: >-
+  Chat interface that supports Q&A about an analysis document and is connected
+  to data on a simulation server for deeper analysis.
+customer: thunderforge
+subtype: chat
+application_name_override: '[TEST] HAVOC Chat'
+sample_prompts:
+  - Elaborate more in the Executive Summary section adding another paragraph
+  - Summarize the conclusion in one sentence
+initial_state:
+  previous_document: ''
+  chat_history:
+    - role: system
+      content: >
+        !You are an expert report generator. Your task is to create a
+        comprehensive, professional report based on the user's request.
+
+        # Database Intelligence Brief
+
+        ## Database **Database:** `lux **Collection:** `event_store_all` —
+        749,882 documents You are NEVER allowed to query any other collection
+        besides `event_store_all` Only ever make ONE tool call at a time **Date
+        range:** 2016 to present **Sort field for recency:** `event_date_mongo`
+        (ISODate — use this for $gte/$lte, NOT `eventDate` which is a string)
+
+        ---
+
+        ### Document Schema
+
+        **Top-level fields:** `eventId`, `title`, `publisher`, `source`,
+        `streamName`, `pubDate`, `eventDate` (string), `event_date_mongo`
+        (ISODate — use this for date range queries), `geometries[]`
+
+        **`attributes.*`** — GDELT fields (Actor/Geo codes) and article content:
+        `article_text`, `article_title`, `article_description`,
+        `article_publisher`, `article_date`, `Actor1CountryCode`,
+        `Actor2CountryCode` (ISO alpha-3: USA, VEN, CHN, RUS, etc.),
+        `Actor1Name`, `Actor2Name`, `ActionGeo_CountryCode`,
+        `ActionGeo_FullName`, `ActionGeo_Lat`, `ActionGeo_Long`, `EventCode`,
+        `EventBaseCode`, `EventRootCode`, `GoldsteinScale`, `AvgTone`,
+        `SOURCEURL`
+
+        **`properties.*`** — NLP enrichment (all are string arrays): `nlp_gpe`
+        (places/countries), `nlp_org` (organizations), `nlp_person` (people),
+        `nlp_loc`, `nlp_norp`, `nlp_quote`, `keyword`, `top_keywords`,
+        `LUX_summary`, `LUX_sentiment`, `LUX_emotion`
+
+        ---
+
+        ### Data Streams (by volume) - `GDELT_stream`: 534,875 docs — best
+        filtered by `Actor1/2CountryCode`, `EventCode`, `ActionGeo_*` -
+        `RSS_stream`: 163,281 docs — best filtered by NLP fields and
+        `article_text` - `reuters_stream`: 32,906 docs — rich article text -
+        `youtube_comments`: 17,924 docs indexes detected; utilize standard **MQL
+        queries** only.
+
+
+        --- ### Query Rules
+
+        **1. Use exact match (not $regex) for NLP array fields.** `nlp_gpe`,
+        `nlp_org`, and `nlp_person` are arrays. MongoDB matches array elements
+        by exact string equality:
+
+        CORRECT: `{"properties.nlp_gpe": "Venezuela"}` → ~13,000 docs
+
+        WRONG: `{"properties.nlp_gpe": {"$regex": "Venezuela"}}` → 0 docs
+
+        **2. Use `event_date_mongo` for date ranges, not `eventDate`.**
+        `eventDate` is a string; `event_date_mongo` is ISODate.
+
+        Example: `{"event_date_mongo": {"$gte": {"$date":
+        "2025-01-01T00:00:00Z"}}}`
+
+        **3. Use `count` before `find`** to verify a filter has results before
+        fetching documents.
+
+        **4. Prefer NLP fields over article_text regex.** There are no text
+        indexes — `$regex` on `article_text` scans all 750k docs. Only use it to
+        refine an already-narrowed result set.
+
+        **5. Use `projection`** to limit returned fields. `article_text` is
+        large; only request it when needed.
+
+        **6. Combine filters freely** — there is no limit on the number of
+        filter fields per query.
+
+        ---
+
+        ### Recommended Query Patterns
+
+        Country/geo topic: `{"properties.nlp_gpe": "Venezuela"}`
+
+        Organization: `{"properties.nlp_org": "NRO"}`
+
+        Person: `{"properties.nlp_person": "Xi Jinping"}`
+
+        Country + recency: `{"properties.nlp_gpe": "Venezuela",
+        "event_date_mongo": {"$gte": {"$date": "2025-06-01T00:00:00Z"}}}`
+
+        GDELT country pair: `{"attributes.Actor1CountryCode": "VEN",
+        "attributes.Actor2CountryCode": "USA"}`
+
+        Keyword + stream: `{"properties.keyword": "maritime", "streamName":
+        "RSS_stream"}`
+
+        ---
+
+        ## Citations
+
+        Every claim in the report MUST be cited. Use inline numeric citations
+        [1], [2], etc. immediately after the sentence that uses the source.
+
+        You should ONLY ever outline the full citation in the Sources section at
+        the end of the report NEVER make any other sections exclusively
+        dedicated to the citations.
+
+        For each document you reference, extract these fields from the
+        projection and record them:
+
+        - `attributes.article_title` or `title` — article headline -
+        `attributes.article_publisher` or `publisher` — outlet name -
+        `attributes.article_date` or `pubDate` — publication date -
+        `attributes.SOURCEURL` — original URL (include if present)
+
+        Always include `attributes.article_title`, `publisher`,
+        `attributes.article_date`, and `attributes.SOURCEURL` in your
+        `projection` when fetching documents so this data is available.
+
+        At the end of the report, append a ## Sources section with a numbered
+        list in this exact format:
+
+        [N] "Article Title," Publisher, Date. URL
+
+        Example: [1] "Venezuela Seizes U.S.-Linked Vessel in Caribbean,"
+        Reuters, 2026-01-14. https://www.reuters.com/example
+
+        If `SOURCEURL` is missing, omit the URL. If `article_title` is missing,
+        use the document's `title` field. Never fabricate citation details —
+        only cite documents actually returned by the database.
+
+        ---
+
+        ## Report Structure NEVER attempt to include any pictures or
+        placeholders for pictures in the report
+
+        Generate the report with:
+
+        - A clear title (# heading)
+
+        - 3-4 well-organized main sections (## headings)
+
+        - Professional, comprehensive content
+
+        - Proper markdown formatting (bullet points, bold/italic, subheadings)
+
+
+        ## Content Guidelines
+
+
+        - Write in a professional, authoritative tone
+
+        - Include relevant details and analysis
+
+        - Make it comprehensive but readable
+
+        - Include data points and metrics in the text (e.g., "Revenue increased
+        15% YoY")
+
+
+        Remember: Output the full report as markdown text in your response. Do
+        not use any tools.
+starting_node: start
+full_messages_optional: true
+global_state_overrides:
+  state:
+    model: anthropic/claude-sonnet-4-5
+    max_tokens: 8192
+    messages: []
+  current_node: start
+machine:
+  start:
+    workflow_config:
+      streaming_nodes:
+        - node: response
+          channel_name: response
+          channel_type: messages
+          cast_mode:
+            mode: auto
+      workflow:
+        - name: previous_context_messages
+          type: jinja_json
+          inputs:
+            full_messages_optional: full_messages_optional
+            chat_history: chat_history
+          config:
+            output_template:
+              jinja_template_str: |-
+                {% if not chat_history or chat_history | length <= 1 %}
+                  {% set messages = [] %}{% if full_messages_optional %}
+                    {% for item in full_messages_optional %}
+                      {% if item.inputs and item.inputs.user_prompt %}
+                        {% set user_msg = {
+                          "role": "user",
+                          "content": item.inputs.user_prompt
+                        } %}
+                        {% set _ = messages.append(user_msg) %}
+                      {% endif %}
+                      {% if item.outputs and item.outputs.Report_Generator %}
+                        {% for msg in item.outputs.Report_Generator %}
+                          {# Create cleaned message with only essential fields #}
+                          {% if msg.role is defined %}
+                            {% set cleaned_msg = {"role": msg.role} %}
+                            {% if msg.content is defined and msg.content %}
+                              {% set _ = cleaned_msg.update({"content": msg.content}) %}
+                            {% endif %}
+                            {% if msg.tool_calls is defined and msg.tool_calls %}
+                              {% set _ = cleaned_msg.update({"tool_calls": msg.tool_calls}) %}
+                            {% endif %}
+                            {% if msg.tool_call_id is defined and msg.tool_call_id %}
+                              {% set _ = cleaned_msg.update({"tool_call_id": msg.tool_call_id}) %}
+                            {% endif %}
+                            {% set _ = messages.append(cleaned_msg) %}
+                          {% endif %}
+                        {% endfor %}
+                      {% endif %}
+                    {% endfor %}
+                  {% endif %}
+                {% endif %} {{ messages | tojson() }}
+        - name: inject_previous_context
+          type: insert_messages
+          config:
+            index: -1
+          inputs:
+            messages: chat_history
+            new_messages: previous_context_messages
+        - name: format_user_message
+          type: jinja
+          config:
+            output_template:
+              jinja_template_str: >-
+                Consider the report to have been generated. Your new primary
+
+                goal is to help a user understand, analyze, and expand upon a
+
+                specific business report that has already been generated.
+
+
+
+                Any requests from the user to edit, or add or delete sections
+                must use the mcp tool calls.
+
+                Never regenerate any part of the report document.
+
+
+
+                You are communicating with high level military officials, so it
+                is
+
+                important to be as concise as possible in your reponse. 1-2
+
+                sentence responses are preferred if possible
+
+
+
+                ### TONE AND STYLE
+
+
+
+                * ** Consice** you are to get straight to the point and answer
+
+                in as short of a manner as possible
+
+
+
+                * **Conversational:** You are chatting with the user, not
+
+                writing a formal document.
+
+
+
+                * **Direct:** Get straight to the answer.
+
+
+
+                * **Visual:** Use Markdown tables or bullet points if comparing
+
+                numbers.
+
+
+
+                * **Proactive:** If you run a query that yields interesting
+
+                results, briefly highlight why that matters.
+
+                <Message>
+
+                {{ user_message }}
+
+                </Message>
+
+                {% if report_file_id %}
+
+                <Report File ID>
+
+                {{ report_file_id }}
+
+                </Report File ID>
+
+                {% endif %}
+          inputs:
+            latest_document: previous_document
+            user_document: document
+            user_message: message
+            full_messages_optional: full_messages_optional
+            report_file_id: report_file_id
+            file_id: file_id
+            knowledge_base_ids: knowledge_base_ids
+            pptx_file_id: pptx_file_id
+        - name: add_user_message
+          type: insert_messages
+          config:
+            index: -1
+          inputs:
+            messages: inject_previous_context.output
+            new_messages:
+              - role: '!user'
+                content: format_user_message
+        - name: response
+          type: tool_generation
+          config:
+            max_turns: 20
+            model: anthropic/claude-sonnet-4-5
+            max_tokens: 16000
+            temperature: 0
+            mcp_servers:
+              - type: streamable_http
+                url: https://mcpx.staging.scalegov.com/@aw/report-mcp/mcp
+                auth:
+                  type: sgp_client
+              - type: streamable_http
+                url: https://mongodb-mcp.staging.scalegov.com/mcp
+          inputs:
+            messages: add_user_message.output
+        - name: add_llm_message
+          type: insert_messages
+          config:
+            index: -1
+          inputs:
+            messages: add_user_message.output
+            new_messages:
+              - response.output
+        - name: updated_document
+          type: jinja
+          config:
+            output_template:
+              jinja_template_str: |-
+                {% if user_document %}
+                {{ user_document }}
+                {% else %}
+                {{ previous_document }}
+                {% endif %}
+          inputs:
+            user_document: document
+            latest_document: previous_document
+    write_to_state:
+      chat_history: add_llm_message
+      previous_document: updated_document
+    next_node:
+      default: workflow
+  workflow:
+    workflow_config:
+      streaming_nodes:
+        - node: response
+          channel_name: response
+          channel_type: messages
+          cast_mode:
+            mode: auto
+      workflow:
+        - name: format_user_message
+          type: jinja
+          config:
+            output_template:
+              jinja_template_str: |-
+                {% if user_document and latest_document != user_document %}
+
+                <Document>
+                {{ user_document }}
+                </Document>
+                {% endif %}
+
+                <Message>
+                {{ user_message }}
+                </Message>
+
+                {% if report_file_id %}
+                <Report File ID>
+                {{ report_file_id }}
+                </Report File ID>
+                {% endif %}
+          inputs:
+            latest_document: previous_document
+            user_document: document
+            user_message: message
+            full_messages_optional: full_messages_optional
+            report_file_id: report_file_id
+        - name: add_user_message
+          type: insert_messages
+          config:
+            index: -1
+          inputs:
+            messages: chat_history
+            new_messages:
+              - role: '!user'
+                content: format_user_message
+        - name: response
+          type: tool_generation
+          config:
+            model: anthropic/claude-sonnet-4-5
+            max_tokens: 8192
+            temperature: 0
+            max_turns: 25
+            mcp_servers:
+              - type: streamable_http
+                url: https://mcpx.staging.scalegov.com/@aw/report-mcp/mcp
+                auth:
+                  type: sgp_client
+              - type: streamable_http
+                url: https://mongodb-mcp.staging.scalegov.com/mcp
+          inputs:
+            messages: add_user_message.output
+        - name: add_llm_message
+          type: insert_messages
+          config:
+            index: -1
+          inputs:
+            messages: add_user_message.output
+            new_messages:
+              - response.output
+        - name: updated_document
+          type: jinja
+          config:
+            output_template:
+              jinja_template_str: |-
+                {% if user_document %}
+                {{ user_document }}
+                {% else %}
+                {{ previous_document }}
+                {% endif %}
+          inputs:
+            user_document: document
+            latest_document: previous_document
+    write_to_state:
+      chat_history: add_llm_message
+      previous_document: updated_document
+    next_node:
+      default: workflow
+config_hash: 0dd5331b45743f6b8ce961cf2fb4ae8ac6c1854c3f17a8d8f5b2502c30791af1
+account_id: 68b9ac15fea04e89975257dd
+id: 6a68c1c8-ecdc-4fc6-b2bd-668e576a5d87
+
